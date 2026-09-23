@@ -76,8 +76,8 @@ enum ChromeProfileStore {
 
 enum ChromeProfileActivator {
     static func activate(_ profile: ChromeProfile) throws {
-        guard let chrome = NSRunningApplication.runningApplications(withBundleIdentifier: "com.google.Chrome").first
-        else {
+        let chromeApplications = NSRunningApplication.runningApplications(withBundleIdentifier: "com.google.Chrome")
+        guard !chromeApplications.isEmpty else {
             try launch(profile)
             return
         }
@@ -86,23 +86,30 @@ enum ChromeProfileActivator {
             throw ProfileBarError.accessibilityAccessRequired
         }
 
-        let application = AXUIElementCreateApplication(chrome.processIdentifier)
-        if pressProfileMenuItem(for: profile, in: application) {
-            chrome.activate()
-            return
+        for chrome in chromeApplications {
+            let application = AXUIElementCreateApplication(chrome.processIdentifier)
+            if let window = windows(of: application).first(where: {
+                ChromeWindowTitleMatcher.matches(
+                    windowTitle: stringAttribute($0, kAXTitleAttribute),
+                    profileName: profile.name,
+                    personName: profile.personName
+                )
+            }) {
+                try raise(window, in: application, chrome: chrome)
+                return
+            }
         }
 
-        if let window = windows(of: application).first(where: {
-            ChromeWindowTitleMatcher.matches(
-                windowTitle: stringAttribute($0, kAXTitleAttribute),
-                profileName: profile.name,
-                personName: profile.personName
-            )
-        }) {
-            try raise(window, in: application, chrome: chrome)
-        } else {
-            try launch(profile)
+        for chrome in chromeApplications {
+            let application = AXUIElementCreateApplication(chrome.processIdentifier)
+            guard !windows(of: application).isEmpty else { continue }
+            if pressProfileMenuItem(for: profile, in: application) {
+                chrome.activate()
+                return
+            }
         }
+
+        try launch(profile)
     }
 
     private static func pressProfileMenuItem(for profile: ChromeProfile, in application: AXUIElement) -> Bool {
