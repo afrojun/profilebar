@@ -30,6 +30,7 @@ Open **Settings…** from the ProfileBar button to:
 - Set a global keyboard shortcut for each profile.
 - Choose which profile avatars stay in the menu bar.
 - Start ProfileBar automatically when you sign in.
+- Find Instant Copy URL and a guide to moving tabs between profiles.
 
 <p align="center">
   <img src="docs/images/settings.png" width="720" alt="ProfileBar settings with Personal, Work, and Side project profiles">
