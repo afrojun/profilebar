@@ -4,7 +4,7 @@
 
 <h1 align="center">ProfileBar</h1>
 
-<p align="center">Jump straight to the Chrome profile you want.</p>
+<p align="center">Switch Chrome profiles instantly. Move pages between them with Instant Copy URL.</p>
 
 <p align="center">
   <a href="https://afrojun.dev/profilebar/">Website</a> ·
