@@ -19,7 +19,7 @@ ProfileBar puts your Chrome profiles in the macOS menu bar. Click a profile avat
 
 If that profile already has a window open, ProfileBar brings it forward, even from another desktop Space. If it does not, ProfileBar opens the profile normally.
 
-With [Instant Copy URL](https://chromewebstore.google.com/detail/instant-copy-url/dhalfjnfoocnfpppmkpidbliccemicno), you can right-click a page or tab, choose **Open tab in profile**, and open its URL in a selected Chrome profile. Enable the optional ProfileBar integration from that menu the first time. ProfileBar registers the local Chrome helper when it launches. If the extension cannot find it, launch ProfileBar and choose **Refresh profiles** from the extension menu.
+With [Instant Copy URL](https://chromewebstore.google.com/detail/instant-copy-url/dhalfjnfoocnfpppmkpidbliccemicno), you can right-click a page or tab, choose **Move tab to profile**, and open its URL in a selected Chrome profile. The extension closes the original tab after ProfileBar reports success. Enable the optional ProfileBar integration from that menu the first time. ProfileBar registers the local Chrome helper when it launches. If the extension cannot find it, launch ProfileBar and choose **Refresh profiles** from the extension menu.
 
 ## Use it
 
@@ -57,7 +57,7 @@ Current releases require macOS 14 or later and an Apple silicon Mac.
 
 Chrome does not provide a public API for bringing a specific profile window to the front. ProfileBar uses macOS Accessibility to raise a matching window first. If there is no window, it tries Chrome's profile command without showing the menu.
 
-ProfileBar reads Chrome's local profile list and saved avatars. For an explicit **Open tab in profile** action, its local helper receives the selected URL and profile directory from the extension and passes them to Chrome. It does not store the URL or send profile data to a server. Ordinary profile switching never uses the current page URL. ProfileBar does not bypass macOS permission controls.
+ProfileBar reads Chrome's local profile list and saved avatars. For an explicit **Move tab to profile** action, its local helper receives the selected URL and profile directory from the extension and passes them to Chrome. It does not store the URL or send profile data to a server. Ordinary profile switching never uses the current page URL. ProfileBar does not bypass macOS permission controls.
 
 ## Limitations
 
