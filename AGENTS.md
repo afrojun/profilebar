@@ -8,8 +8,7 @@ ProfileBar is a native macOS menu-bar app. One action must switch to an open Chr
 
 - Profile-avatar clicks and global shortcuts must call the same switch-or-open path.
 - Never copy, reopen, or forward the current page URL while changing profiles.
-- Use Accessibility to run Chrome's profile command without showing its Profiles menu.
-- Keep window-title lookup and safe profile launch as fallbacks.
+- Search Accessibility windows across every running Chrome instance first, including other desktop Spaces. If no window matches, try Chrome's profile command without showing its Profiles menu, then launch the profile as a last resort.
 - Match profile menu labels exactly by profile name or by Chrome's qualified `Person (Profile)` form. A person name alone is ambiguous.
 - Store profile preferences by Chrome's stable profile directory, not by display name or list position.
 - Each profile avatar is optional. Keep the settings item so Settings and Quit are always available.
@@ -39,7 +38,7 @@ For a feature:
 2. Find which file owns the behavior before adding a type or stored state.
 3. Keep pure rules separate and testable; keep AppKit flow thin.
 4. Build the smallest complete change.
-5. Test the main path and its fallback in the installed app.
+5. Test the main path and its fallback using the [testing guide](docs/testing.md).
 
 For a bug:
 
@@ -48,7 +47,7 @@ For a bug:
 3. List testable causes and check the most likely one first.
 4. Test the code that failed. If AppKit behavior has no useful unit test, record the live UI check in the handoff.
 5. Apply the smallest fix. Rerun both the short check and the original stress case.
-6. Remove test probes, logs, binaries, and preferences.
+6. Remove temporary test artifacts and restore only the preferences changed for the test. Never clear the user's settings.
 
 Before finishing non-trivial code, read the diff as a new reviewer. The main flow should read top-to-bottom at one level. Extract helpers only for clear duties. Avoid pass-through helpers, unneeded fallbacks, parallel collections, and state that can be derived.
 
@@ -74,43 +73,37 @@ Before finishing non-trivial code, read the diff as a new reviewer. The main flo
 
 ## Build and test
 
-Run the unit suite:
+Follow the [testing guide](docs/testing.md) for the full checklist and live Accessibility test matrix. The baseline commands are:
 
 ```zsh
 ./test.sh
-```
-
-Build and sign the app:
-
-```zsh
 ./build.sh --dev
+PROFILEBAR_SIGNING_IDENTITY=- ./build.sh --release
 ```
 
-The development app is `build/ProfileBar Dev.app` with bundle ID `dev.afrojun.ProfileBar.dev`. Use `./build.sh --release` only for the production `build/ProfileBar.app` with bundle ID `dev.afrojun.ProfileBar`.
+The last command matches CI's ad-hoc release build; it checks compilation but is not suitable for installation or distribution. A live test of the production app requires a Developer ID-signed `./build.sh --release` build. The development app has a separate bundle ID and Accessibility permission. Never install an ad-hoc build over a certificate-signed app.
 
-Before handing back a change:
+Before handing back a code or build change:
 
-1. Run `./test.sh`.
-2. Run `./build.sh --dev` and `./build.sh --release` with warnings treated as errors.
-3. Verify the built signature with `codesign --verify --deep --strict`.
-4. Run `git diff --check`.
-5. Check the diff for credentials, personal data, user paths, and generated files.
-6. Read the main flow top-to-bottom and remove unneeded state or indirection.
-7. Confirm the installed app and repository build came from the same source revision.
+1. Run the baseline commands above and verify both built signatures with `codesign --verify --deep --strict`.
+2. Run `git diff --check` and check the diff for credentials, personal data, user paths, and generated files.
+3. Read the main flow top-to-bottom and remove unneeded state or indirection.
+4. For live UI work, confirm the installed signed app was built from the current source and is trusted for Accessibility.
+
+For documentation-only changes, check links and `git diff --check`; rerun the build checks when the documented commands or behavior have changed.
 
 The scripts create throwaway test binaries. In a restricted environment, point `CLANG_MODULE_CACHE_PATH` and `SWIFT_MODULECACHE_PATH` to a writable temporary directory instead of changing the scripts.
 
-The sandbox may hide login Keychain identities. If `build.sh` warns that it is signing ad hoc, do not install that build over a certificate-signed copy. Build with Keychain access, then verify the installed signature and Accessibility trust.
+The sandbox may hide login Keychain identities. Build with Keychain access for a signed live test, then verify the installed signature and Accessibility trust.
 
 ## Regression coverage
 
-- Add focused cases to `Tests/ChromeWindowTitleMatcherTests.swift` for matching, checks, shortcut formatting, and preferences.
-- Use an installed, signed build to test Accessibility, menu-bar items, global hotkeys, and cross-Space switching. A test binary has a different Accessibility identity.
-- For window bugs, repeat the real menu action and check the live window count. Add timing stress for intermittent bugs.
-- After rebuilding the installed app, verify Accessibility trust. A changed signing identity may require the user to approve access again.
+- Add focused pure-logic cases to `Tests/ProfileBarTests.swift`. Accessibility and menu-bar behavior need a signed live-app check; a test binary has a different Accessibility identity.
+- For window bugs, repeat the real action and check the live window count. Add timing stress for intermittent bugs. Use the scenarios in the [testing guide](docs/testing.md).
 
 ## Documentation and distribution
 
 - Update `README.md` whenever user-visible behavior, permissions, settings, build steps, or limitations change.
 - Keep local self-signed builds separate from public releases. Public binaries need an Apple Developer ID signature and notarization, or Mac App Store signing.
 - Do not commit the built `.app`; `build/` remains generated output.
+- Submit changes through a branch and pull request; `main` requires the `validate` check. Follow [development and release procedures](docs/development.md). A merge does not publish a release; a version tag triggers the [release workflow](.github/workflows/release.yml).
