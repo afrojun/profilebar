@@ -23,6 +23,8 @@ Development builds use the local `ProfileBar Local Signing` identity when availa
 
 GitHub Actions runs the same formatting, test, build, deployment-target, signature, and DMG checks for pull requests and pushes to `main`.
 
+Follow the [testing guide](testing.md) for live profile, shortcut, and cross-Space checks. CI cannot run those Accessibility scenarios.
+
 Format the Swift sources with the same rules enforced by the test script:
 
 ```zsh
@@ -34,6 +36,10 @@ To inspect the permission without opening the app UI:
 ```zsh
 ./build/ProfileBar\ Dev.app/Contents/MacOS/ProfileBar --check-accessibility
 ```
+
+## Submit a change
+
+Work on a branch and open a pull request to `main`; direct pushes are blocked. Wait for the required `validate` check, address any review feedback, then merge. Confirm local `main` matches `origin/main` after merging. A merge does not publish an app update; only a pushed version tag starts the [release workflow](../.github/workflows/release.yml).
 
 ## Keep Accessibility permission across local builds
 
@@ -95,14 +101,7 @@ The first command uploads the encoded certificate. The other commands prompt for
 
 ### Create the release
 
-From a committed `main` branch:
-
-1. Install the Developer ID-signed build in Applications.
-2. Confirm an avatar click focuses a profile in the current Space and another Space.
-3. Confirm selecting a closed profile opens it without copying the current URL.
-4. Confirm each assigned shortcut performs the same switch-or-open action.
-5. Confirm Settings reuses one window and **Start at login** reports its state correctly.
-6. Run the automated checks with `./test.sh` and `./build.sh --release`.
+From a committed `main` branch, complete the [live release checks](testing.md#live-app-checks) with a Developer ID-signed build and run `./test.sh` and `./build.sh --release`.
 
 Then create and push the version tag:
 
