@@ -8,6 +8,7 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
     private var utilityItem: NSStatusItem!
     private var profiles: [ChromeProfile] = []
     private var profileError: String?
+    private var nativeHostError: String?
     private let preferences = ProfileShortcutPreferences()
     private lazy var hotKeyRegistrar = GlobalHotKeyRegistrar { [weak self] profile in
         self?.activate(profile)
@@ -17,6 +18,11 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        do {
+            try NativeHostRegistration.installForCurrentApp()
+        } catch {
+            nativeHostError = error.localizedDescription
+        }
         utilityItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         utilityItem.button?.image = ProfileBarSymbol.image(
             isDevelopment: Bundle.main.bundleIdentifier?.hasSuffix(".dev") == true)
@@ -95,6 +101,14 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
 
     private func fillUtilityMenu(_ menu: NSMenu) {
         menu.removeAllItems()
+        if let nativeHostError {
+            let error = NSMenuItem(
+                title: "Chrome Integration Error…", action: #selector(showNativeHostError), keyEquivalent: "")
+            error.target = self
+            error.toolTip = nativeHostError
+            menu.addItem(error)
+            menu.addItem(.separator())
+        }
         if let profileError {
             let error = NSMenuItem(title: profileError, action: nil, keyEquivalent: "")
             error.isEnabled = false
@@ -142,6 +156,10 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
 
     @objc private func checkForUpdates() {
         updateChecker.checkNow()
+    }
+
+    @objc private func showNativeHostError() {
+        if let nativeHostError { show(error: nativeHostError) }
     }
 
     @objc private func openSettings() {

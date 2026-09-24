@@ -71,6 +71,8 @@ mkdir -p "$contents_dir/MacOS" "$contents_dir/Resources"
 swiftc -target "arm64-apple-macos${minimum_macos_version}" -O -warnings-as-errors \
   -framework AppKit -framework ApplicationServices -framework Carbon -framework ServiceManagement \
   "$project_dir/Sources/ProfileBar/ChromeProfile.swift" \
+  "$project_dir/Sources/ProfileBar/ChromeProfileActivator.swift" \
+  "$project_dir/Sources/ProfileBar/NativeHostRegistration.swift" \
   "$project_dir/Sources/ProfileBar/GlobalHotKeyRegistrar.swift" \
   "$project_dir/Sources/ProfileBar/ChromeWindowTitleMatcher.swift" \
   "$project_dir/Sources/ProfileBar/ProfileBarSymbol.swift" \
@@ -81,6 +83,11 @@ swiftc -target "arm64-apple-macos${minimum_macos_version}" -O -warnings-as-error
   "$project_dir/Sources/ProfileBar/UpdateChecker.swift" \
   "$project_dir/Sources/ProfileBar/main.swift" \
   -o "$contents_dir/MacOS/ProfileBar"
+swiftc -target "arm64-apple-macos${minimum_macos_version}" -O -warnings-as-errors \
+  "$project_dir/Sources/ProfileBar/ChromeProfile.swift" \
+  "$project_dir/Sources/NativeHost/ProfileBridge.swift" \
+  "$project_dir/Sources/NativeHost/NativeMessagingHost.swift" \
+  -o "$contents_dir/MacOS/ProfileBarNativeHost"
 
 cp "$project_dir/Info.plist" "$contents_dir/Info.plist"
 if [[ "$variant" == dev ]]; then
@@ -93,5 +100,6 @@ signing_options=(--force --sign "$signing_identity")
 if [[ "$signing_identity" == "Developer ID Application:"* ]]; then
   signing_options+=(--options runtime --timestamp)
 fi
+codesign "${signing_options[@]}" "$contents_dir/MacOS/ProfileBarNativeHost"
 codesign "${signing_options[@]}" "$app_dir"
 print "$app_dir"

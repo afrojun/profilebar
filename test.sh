@@ -8,6 +8,8 @@ xcrun swift-format lint --strict --configuration "$project_dir/.swift-format" \
 swiftc -warnings-as-errors \
   -framework AppKit -framework ApplicationServices -framework Carbon \
   "$project_dir/Sources/ProfileBar/ChromeProfile.swift" \
+  "$project_dir/Sources/ProfileBar/NativeHostRegistration.swift" \
+  "$project_dir/Sources/NativeHost/ProfileBridge.swift" \
   "$project_dir/Sources/ProfileBar/ChromeWindowTitleMatcher.swift" \
   "$project_dir/Sources/ProfileBar/ProfileBarSymbol.swift" \
   "$project_dir/Sources/ProfileBar/ProfileShortcut.swift" \

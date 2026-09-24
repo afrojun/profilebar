@@ -7,7 +7,7 @@ ProfileBar is a native macOS menu-bar app. One action must switch to an open Chr
 ## Product invariants
 
 - Profile-avatar clicks and global shortcuts must call the same switch-or-open path.
-- Never copy, reopen, or forward the current page URL while changing profiles.
+- Profile-avatar clicks and shortcuts must never copy, reopen, or forward the current page URL. The separate browser extension action may open a user-selected URL in a user-selected profile.
 - Search Accessibility windows across every running Chrome instance first, including other desktop Spaces. If no window matches, try Chrome's profile command without showing its Profiles menu, then launch the profile as a last resort.
 - Match profile menu labels exactly by profile name or by Chrome's qualified `Person (Profile)` form. A person name alone is ambiguous.
 - Store profile preferences by Chrome's stable profile directory, not by display name or list position.
@@ -18,7 +18,10 @@ ProfileBar is a native macOS menu-bar app. One action must switch to an open Chr
 
 ## Architecture
 
-- `ChromeProfile.swift` owns profile loading, validation, and activation.
+- `ChromeProfile.swift` owns profile loading and validation.
+- `ChromeProfileActivator.swift` owns normal switch-or-open activation.
+- `NativeHostRegistration.swift` registers Chrome's local native messaging host.
+- `Sources/NativeHost` handles explicit open-URL requests from the extension.
 - `ChromeWindowTitleMatcher.swift` owns Chrome label matching and should remain independently testable.
 - `ProfileShortcut.swift` owns persisted shortcut values and profile-icon visibility.
 - `GlobalHotKeyRegistrar.swift` owns Carbon hotkey registration and dispatch only.
