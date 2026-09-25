@@ -41,6 +41,9 @@ struct SettingsActions {
 @MainActor
 final class SettingsWindowController: NSWindowController {
     private static let websiteURL = URL(string: "https://afrojun.dev/profilebar/")!
+    private static let moveTabsGuideURL = URL(string: "https://afrojun.dev/profilebar/#move-tabs")!
+    private static let extensionURL = URL(
+        string: "https://chromewebstore.google.com/detail/instant-copy-url/dhalfjnfoocnfpppmkpidbliccemicno")!
     private static let repositoryURL = URL(string: "https://github.com/afrojun/profilebar")!
     private static let helpURL = repositoryURL.appending(path: "issues/new/choose")
 
@@ -76,7 +79,7 @@ final class SettingsWindowController: NSWindowController {
     func refresh() {
         let snapshot = actions.snapshot()
         window?.contentView = makeContentView(snapshot)
-        let height = max(360, 230 + 50 * snapshot.profiles.count)
+        let height = max(480, 350 + 50 * snapshot.profiles.count)
         window?.setContentSize(NSSize(width: 540, height: height))
     }
 
@@ -126,6 +129,15 @@ final class SettingsWindowController: NSWindowController {
         stack.addArrangedSubview(access)
         access.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
+        let moveTabsSeparator = NSBox()
+        moveTabsSeparator.boxType = .separator
+        stack.addArrangedSubview(moveTabsSeparator)
+        moveTabsSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        let moveTabs = makeMoveTabsSection()
+        stack.addArrangedSubview(moveTabs)
+        moveTabs.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
         let footerSeparator = NSBox()
         footerSeparator.boxType = .separator
         stack.addArrangedSubview(footerSeparator)
@@ -169,6 +181,22 @@ final class SettingsWindowController: NSWindowController {
         let detail = Self.detail(hasAccess ? "Allowed" : "Required to switch to an open Chrome profile.")
         detail.textColor = hasAccess ? .secondaryLabelColor : .systemOrange
         return Self.settingRow(title: "Accessibility", detail: detail, controls: [check, open])
+    }
+
+    private func makeMoveTabsSection() -> NSView {
+        let description = Self.detail(
+            "Move a page to another Chrome profile from the Instant Copy URL right-click menu.")
+        let extensionLink = linkButton("Get Instant Copy URL", action: #selector(openExtensionStore))
+        let guideLink = linkButton("How it works", action: #selector(openMoveTabsGuide))
+        let links = NSStackView(views: [extensionLink, guideLink])
+        links.orientation = .horizontal
+        links.spacing = 16
+
+        let section = NSStackView(views: [Self.heading("Move tabs between profiles"), description, links])
+        section.orientation = .vertical
+        section.alignment = .leading
+        section.spacing = 6
+        return section
     }
 
     @objc private func changeLaunchAtLogin(_ sender: NSSwitch) {
@@ -217,6 +245,14 @@ final class SettingsWindowController: NSWindowController {
 
     @objc private func openHelp() {
         NSWorkspace.shared.open(Self.helpURL)
+    }
+
+    @objc private func openExtensionStore() {
+        NSWorkspace.shared.open(Self.extensionURL)
+    }
+
+    @objc private func openMoveTabsGuide() {
+        NSWorkspace.shared.open(Self.moveTabsGuideURL)
     }
 
     @objc private func openRepository() {

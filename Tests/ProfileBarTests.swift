@@ -118,6 +118,45 @@ struct ProfileBarTests {
             "an unsafe directory from Chrome data should be rejected"
         )
 
+        let workProfile = try! ChromeProfile(directory: "Profile 2", name: "Work", personName: nil)
+        var openedURL: URL?
+        let bridge = ProfileBridge(
+            loadProfiles: { [workProfile] },
+            openURL: { _, url in openedURL = url }
+        )
+        let listed = bridge.handle(["type": "listProfiles"])
+        expect(listed["ok"] as? Bool == true, "the helper should list Chrome profiles")
+        let listedProfiles = listed["profiles"] as? [[String: String]]
+        expect(listedProfiles?.first?["directory"] == "Profile 2", "profiles should be identified by directory")
+        let invalidURL = bridge.handle([
+            "type": "openURL", "profileDirectory": "Profile 2", "url": "file:///private/tmp/example",
+        ])
+        expect(invalidURL["error"] as? String == "invalid_request", "the helper should reject non-web URLs")
+        expect(openedURL == nil, "an invalid URL must not launch Chrome")
+        let unknownProfile = bridge.handle([
+            "type": "openURL", "profileDirectory": "Profile 3", "url": "https://example.com/",
+        ])
+        expect(unknownProfile["error"] as? String == "profile_not_found", "a stale profile must not launch Chrome")
+        expect(openedURL == nil, "an unknown profile must not launch Chrome")
+        let opened = bridge.handle([
+            "type": "openURL", "profileDirectory": "Profile 2", "url": "https://example.com/path",
+        ])
+        expect(opened["ok"] as? Bool == true, "a valid request should open the URL")
+        expect(openedURL?.absoluteString == "https://example.com/path", "the selected URL should reach the launcher")
+
+        let manifest = try! NativeHostRegistration.manifest(
+            hostName: NativeHostRegistration.productionHostName,
+            extensionID: NativeHostRegistration.storeExtensionID,
+            helperPath: "/Applications/ProfileBar.app/Contents/MacOS/ProfileBarNativeHost"
+        )
+        let manifestObject = try! JSONSerialization.jsonObject(with: manifest) as! [String: Any]
+        expect(
+            (manifestObject["allowed_origins"] as? [String]) == [
+                "chrome-extension://dhalfjnfoocnfpppmkpidbliccemicno/"
+            ],
+            "only the published extension should reach the production helper"
+        )
+
         let hotKey = ProfileHotKey(
             keyCode: 18,
             modifiers: UInt32(controlKey | optionKey),
