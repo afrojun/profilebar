@@ -2,7 +2,7 @@ import Foundation
 
 struct ProfileBridge {
     let loadProfiles: () throws -> [ChromeProfile]
-    let openURL: (ChromeProfile, URL) throws -> Void
+    let openURLs: (ChromeProfile, [URL]) throws -> Void
 
     func handle(_ request: [String: Any]) -> [String: Any] {
         do {
@@ -10,20 +10,36 @@ struct ProfileBridge {
             case "listProfiles":
                 let profiles = try loadProfiles().map { ["directory": $0.directory, "name": $0.name] }
                 return ["ok": true, "profiles": profiles]
-            case "openURL":
+            case "openURL", "openURLs":
+                let rawURLs: [String]?
+                if request["type"] as? String == "openURL" {
+                    rawURLs = (request["url"] as? String).map { [$0] }
+                } else {
+                    rawURLs = request["urls"] as? [String]
+                }
                 guard
                     let directory = request["profileDirectory"] as? String,
-                    let rawURL = request["url"] as? String,
-                    rawURL.utf8.count <= 65_536,
-                    let url = URL(string: rawURL),
-                    ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
-                    url.host != nil
+                    let rawURLs,
+                    !rawURLs.isEmpty,
+                    rawURLs.count <= 100,
+                    rawURLs.reduce(0, { $0 + $1.utf8.count }) <= 120_000
                 else { return failure("invalid_request") }
+
+                let urls = rawURLs.compactMap { rawURL -> URL? in
+                    guard
+                        rawURL.utf8.count <= 65_536,
+                        let url = URL(string: rawURL),
+                        ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                        url.host != nil
+                    else { return nil }
+                    return url
+                }
+                guard urls.count == rawURLs.count else { return failure("invalid_request") }
 
                 guard let profile = try loadProfiles().first(where: { $0.directory == directory }) else {
                     return failure("profile_not_found")
                 }
-                try openURL(profile, url)
+                try openURLs(profile, urls)
                 return ["ok": true]
             default:
                 return failure("invalid_request")
@@ -39,12 +55,12 @@ struct ProfileBridge {
 }
 
 enum ChromeURLLauncher {
-    static func open(_ profile: ChromeProfile, url: URL) throws {
+    static func open(_ profile: ChromeProfile, urls: [URL]) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = [
-            "-na", "Google Chrome", "--args", "--profile-directory=\(profile.directory)", url.absoluteString,
-        ]
+        process.arguments =
+            ["-na", "Google Chrome", "--args", "--profile-directory=\(profile.directory)"]
+            + urls.map(\.absoluteString)
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {

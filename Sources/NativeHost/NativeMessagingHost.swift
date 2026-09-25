@@ -8,10 +8,10 @@ struct NativeMessagingHost {
             let length = header.enumerated().reduce(UInt32(0)) { size, byte in
                 size | UInt32(byte.element) << (byte.offset * 8)
             }
-            guard length > 0 && length <= 65_536 else { return }
+            guard length > 0 && length <= 131_072 else { return }
             guard let data = try readExactly(Int(length)) else { return }
             let request = (try JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-            let bridge = ProfileBridge(loadProfiles: ChromeProfileStore.load, openURL: ChromeURLLauncher.open)
+            let bridge = ProfileBridge(loadProfiles: ChromeProfileStore.load, openURLs: ChromeURLLauncher.open)
             let response = bridge.handle(request)
             let responseData = try JSONSerialization.data(withJSONObject: response)
             let responseLength = UInt32(responseData.count)
