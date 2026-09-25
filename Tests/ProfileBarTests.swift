@@ -119,10 +119,10 @@ struct ProfileBarTests {
         )
 
         let workProfile = try! ChromeProfile(directory: "Profile 2", name: "Work", personName: nil)
-        var openedURL: URL?
+        var openedURLs: [URL]?
         let bridge = ProfileBridge(
             loadProfiles: { [workProfile] },
-            openURL: { _, url in openedURL = url }
+            openURLs: { _, urls in openedURLs = urls }
         )
         let listed = bridge.handle(["type": "listProfiles"])
         expect(listed["ok"] as? Bool == true, "the helper should list Chrome profiles")
@@ -132,17 +132,35 @@ struct ProfileBarTests {
             "type": "openURL", "profileDirectory": "Profile 2", "url": "file:///private/tmp/example",
         ])
         expect(invalidURL["error"] as? String == "invalid_request", "the helper should reject non-web URLs")
-        expect(openedURL == nil, "an invalid URL must not launch Chrome")
+        expect(openedURLs == nil, "an invalid URL must not launch Chrome")
         let unknownProfile = bridge.handle([
             "type": "openURL", "profileDirectory": "Profile 3", "url": "https://example.com/",
         ])
         expect(unknownProfile["error"] as? String == "profile_not_found", "a stale profile must not launch Chrome")
-        expect(openedURL == nil, "an unknown profile must not launch Chrome")
+        expect(openedURLs == nil, "an unknown profile must not launch Chrome")
         let opened = bridge.handle([
             "type": "openURL", "profileDirectory": "Profile 2", "url": "https://example.com/path",
         ])
         expect(opened["ok"] as? Bool == true, "a valid request should open the URL")
-        expect(openedURL?.absoluteString == "https://example.com/path", "the selected URL should reach the launcher")
+        expect(
+            openedURLs?.map(\.absoluteString) == ["https://example.com/path"],
+            "the selected URL should reach the launcher"
+        )
+        let invalidBatch = bridge.handle([
+            "type": "openURLs", "profileDirectory": "Profile 2",
+            "urls": ["https://example.com/first", "chrome://settings"],
+        ])
+        expect(invalidBatch["error"] as? String == "invalid_request", "one invalid URL must reject the whole batch")
+        expect(openedURLs?.count == 1, "an invalid batch must not launch Chrome")
+        let openedBatch = bridge.handle([
+            "type": "openURLs", "profileDirectory": "Profile 2",
+            "urls": ["https://example.com/first", "https://example.com/second"],
+        ])
+        expect(openedBatch["ok"] as? Bool == true, "a valid batch should open all URLs")
+        expect(
+            openedURLs?.map(\.absoluteString) == ["https://example.com/first", "https://example.com/second"],
+            "the launcher should receive every URL in tab order"
+        )
 
         let manifest = try! NativeHostRegistration.manifest(
             hostName: NativeHostRegistration.productionHostName,
