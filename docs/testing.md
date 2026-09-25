@@ -30,4 +30,6 @@ Record the starting Chrome window count and any ProfileBar settings you plan to 
 
 For settings or shortcut changes, also check that repeated **Settings…** actions reuse one window, a hidden menu-bar avatar does not disable its shortcut, and shortcut conflicts leave the previous assignment intact. Restore only settings changed for the test. Close only windows the test created, and do not remove Chrome profile data.
 
+For tab moves, enable ProfileBar integration in Instant Copy URL and move an HTTP page to another Chrome profile. Check that the source tab closes only after the destination opens, the copy shortcut still works, and the extension gives a useful setup path when ProfileBar is unavailable.
+
 For a release, also check **Start at login**, the update-check action, the drag-to-Applications DMG, and the installed app's signature and Accessibility trust. The signing, notarization, and publication steps live in [development and releases](development.md).
