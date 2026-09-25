@@ -21,7 +21,7 @@ If that profile already has a window open, ProfileBar brings it forward, even fr
 
 With [Instant Copy URL](https://chromewebstore.google.com/detail/instant-copy-url/dhalfjnfoocnfpppmkpidbliccemicno), you can right-click a page or tab, choose **Move tab to profile**, and open its URL in a selected Chrome profile. The extension closes the original tab after ProfileBar reports success. Enable the optional ProfileBar integration from that menu the first time. ProfileBar registers the local Chrome helper when it launches. If the extension cannot find it, launch ProfileBar and choose **Refresh profiles** from the extension menu.
 
-Select several tabs and right-click one of them to move their URLs together. Choose **Enable selected tab moves…** from that menu first; Chrome then asks for optional tab access so the extension can read every selected URL. ProfileBar opens them in tab order, and the extension closes the originals after the handoff. Tab group names and colours are not recreated in the destination profile.
+Select several tabs and right-click one of them to move their URLs together. Instant Copy URL reads the selected URLs, ProfileBar opens them in tab order, and the extension closes the originals after the handoff. Tab group names and colours are not recreated in the destination profile.
 
 ## Use it
 
