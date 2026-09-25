@@ -13,10 +13,12 @@ case "$variant" in
     variant=dev
     app_name="ProfileBar Dev"
     dev_bundle_id="dev.afrojun.ProfileBar.dev"
+    icon_name="AppIconDev.icns"
     ;;
   --release)
     variant=release
     app_name="ProfileBar"
+    icon_name="AppIcon.icns"
     ;;
   *)
     print -u2 "Usage: $0 [--dev | --release]"
@@ -86,7 +88,7 @@ if [[ "$variant" == dev ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleName $app_name" "$contents_dir/Info.plist"
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $dev_bundle_id" "$contents_dir/Info.plist"
 fi
-cp "$project_dir/Resources/AppIcon.icns" "$contents_dir/Resources/AppIcon.icns"
+cp "$project_dir/Resources/$icon_name" "$contents_dir/Resources/AppIcon.icns"
 signing_options=(--force --sign "$signing_identity")
 if [[ "$signing_identity" == "Developer ID Application:"* ]]; then
   signing_options+=(--options runtime --timestamp)

@@ -17,7 +17,7 @@ The first switch explains why Accessibility access is needed and links to **Syst
 ./build.sh
 ```
 
-The default development build is written to `build/ProfileBar Dev.app`. It has its own bundle ID, preferences, Accessibility permission, and login item, so it can coexist with the released app in `/Applications`. Quit the released app before running the development build to avoid duplicate menu-bar items and shortcut conflicts.
+The default development build is written to `build/ProfileBar Dev.app`. It has its own bundle ID, preferences, Accessibility permission, login item, cool-world app icon, and three hollow menu-bar panels, so you can tell it apart from the release app. Quit the released app before running the development build to avoid duplicate menu-bar items and shortcut conflicts.
 
 Development builds use the local `ProfileBar Local Signing` identity when available. Without it, the build uses an ad-hoc signature, which may cause macOS to ask for Accessibility permission after each rebuild.
 
