@@ -44,12 +44,14 @@ jobs:
           dev_app="build/ProfileBar Dev.app"
           [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$dev_app/Contents/Info.plist")" == "ProfileBar Dev" ]]
           [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$dev_app/Contents/Info.plist")" == "dev.afrojun.ProfileBar.dev" ]]
+          cmp Resources/AppIconDev.icns "$dev_app/Contents/Resources/AppIcon.icns"
           codesign --verify --deep --strict --verbose=2 "$dev_app"
 
           ./build.sh --release
           codesign --verify --deep --strict --verbose=2 build/ProfileBar.app
           [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ProfileBar.app/Contents/Info.plist)" == "ProfileBar" ]]
           [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ProfileBar.app/Contents/Info.plist)" == "dev.afrojun.ProfileBar" ]]
+          cmp Resources/AppIcon.icns build/ProfileBar.app/Contents/Resources/AppIcon.icns
 
           executable="build/ProfileBar.app/Contents/MacOS/ProfileBar"
           minimum_macos_version="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' Info.plist)"

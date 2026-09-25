@@ -18,7 +18,8 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         utilityItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        utilityItem.button?.image = ProfileBarSymbol.image()
+        utilityItem.button?.image = ProfileBarSymbol.image(
+            isDevelopment: Bundle.main.bundleIdentifier?.hasSuffix(".dev") == true)
         utilityItem.button?.setAccessibilityLabel("ProfileBar settings")
 
         let menu = NSMenu()

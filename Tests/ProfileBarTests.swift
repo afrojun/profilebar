@@ -158,6 +158,29 @@ struct ProfileBarTests {
         expect(symbol.size == NSSize(width: 18, height: 18), "menu-bar symbol should use the native status-item size")
         expect(symbol.isTemplate, "menu-bar symbol should adapt to the menu-bar appearance")
         expect(symbol.tiffRepresentation != nil, "menu-bar symbol should render")
+        let devSymbol = ProfileBarSymbol.image(isDevelopment: true)
+        expect(devSymbol.size == symbol.size, "development symbol should keep the menu-bar size")
+        expect(devSymbol.isTemplate, "development symbol should adapt to the menu-bar appearance")
+        let regularPixels = NSBitmapImageRep(data: symbol.tiffRepresentation!)!
+        let devPixels = NSBitmapImageRep(data: devSymbol.tiffRepresentation!)!
+        let centerX = regularPixels.pixelsWide / 2
+        let centerY = regularPixels.pixelsHigh / 2
+        for x in [3, centerX, 15] {
+            expect(
+                regularPixels.colorAt(x: x, y: centerY)!.alphaComponent > 0.5,
+                "regular symbol should fill all three panels"
+            )
+            expect(
+                devPixels.colorAt(x: x, y: centerY)!.alphaComponent < 0.5,
+                "development symbol should leave all three panels hollow"
+            )
+        }
+        for x in [1, 6, 16] {
+            expect(
+                devPixels.colorAt(x: x, y: centerY)!.alphaComponent > 0.5,
+                "development symbol should show all three outlines"
+            )
+        }
 
         expect(AppVersion("v1.10.0")! > AppVersion("1.9.9")!, "version comparison should use numeric parts")
         expect(AppVersion("1.0")! == AppVersion("1.0.0")!, "missing version parts should equal zero")
