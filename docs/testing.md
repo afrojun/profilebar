@@ -31,5 +31,13 @@ Record the starting Chrome window count and any ProfileBar settings you plan to 
 For settings or shortcut changes, also check that repeated **Settings…** actions reuse one window, a hidden menu-bar avatar does not disable its shortcut, and shortcut conflicts leave the previous assignment intact. Restore only settings changed for the test. Close only windows the test created, and do not remove Chrome profile data.
 
 For tab moves, enable ProfileBar integration in Instant Copy URL and move an HTTP page to another Chrome profile. Check that the source tab closes only after the destination opens, the copy shortcut still works, and the extension gives a useful setup path when ProfileBar is unavailable.
+With a Chrome window focused, confirm its own profile is absent from the extension's page and tab destination menus. When Accessibility access is unavailable or the focused window cannot be matched uniquely, confirm all profiles remain visible.
+
+For a group move, right-click a tab inside a group. With the current extension
+and native access enabled in the destination profile, check that its URLs open
+in tab order with the same title, colour, and collapsed state before the source
+group closes. Repeat with the extension absent or disabled in the destination:
+the URLs should open without a group. If the receiver claims a handoff but
+cannot create the group, the source group must stay open.
 
 For a release, also check **Start at login**, the update-check action, the drag-to-Applications DMG, and the installed app's signature and Accessibility trust. The signing, notarization, and publication steps live in [development and releases](development.md).

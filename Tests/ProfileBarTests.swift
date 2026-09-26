@@ -119,15 +119,35 @@ struct ProfileBarTests {
         )
 
         let workProfile = try! ChromeProfile(directory: "Profile 2", name: "Work", personName: nil)
+        let otherWorkProfile = try! ChromeProfile(directory: "Profile 3", name: "Work", personName: nil)
+        expect(
+            ChromeFocusedProfile.match(
+                windowTitle: "Calendar - Google Chrome – Work", profiles: [workProfile]) == workProfile,
+            "a unique focused Chrome window should identify its profile")
+        expect(
+            ChromeFocusedProfile.match(
+                windowTitle: "Calendar - Google Chrome – Work",
+                profiles: [workProfile, otherWorkProfile]) == nil,
+            "an ambiguous profile label must leave all destinations visible")
         var openedURLs: [URL]?
+        var openedGroup: TabGroupDetails?
+        var groupedResult = true
         let bridge = ProfileBridge(
             loadProfiles: { [workProfile] },
-            openURLs: { _, urls in openedURLs = urls }
+            focusedProfile: { _ in workProfile },
+            openURLs: { _, urls in openedURLs = urls },
+            openGroup: { _, _, group, _ in
+                openedGroup = group
+                return groupedResult
+            }
         )
         let listed = bridge.handle(["type": "listProfiles"])
         expect(listed["ok"] as? Bool == true, "the helper should list Chrome profiles")
         let listedProfiles = listed["profiles"] as? [[String: String]]
         expect(listedProfiles?.first?["directory"] == "Profile 2", "profiles should be identified by directory")
+        expect(
+            listed["focusedProfileDirectory"] as? String == "Profile 2",
+            "a verified focused profile should be returned by directory")
         let invalidURL = bridge.handle([
             "type": "openURL", "profileDirectory": "Profile 2", "url": "file:///private/tmp/example",
         ])
@@ -161,6 +181,91 @@ struct ProfileBarTests {
             openedURLs?.map(\.absoluteString) == ["https://example.com/first", "https://example.com/second"],
             "the launcher should receive every URL in tab order"
         )
+        let groupRequest: [String: Any] = [
+            "type": "openGroup", "profileDirectory": "Profile 2",
+            "urls": ["https://example.com/first", "https://example.com/second"],
+            "group": ["title": "Research", "color": "blue", "collapsed": true],
+        ]
+        let untrustedGroup = bridge.handle(groupRequest)
+        expect(
+            untrustedGroup["error"] as? String == "invalid_request",
+            "a caller without an extension origin cannot open a group")
+        let grouped = bridge.handle(groupRequest, callerExtensionID: NativeHostRegistration.storeExtensionID)
+        expect(
+            grouped["ok"] as? Bool == true && grouped["grouped"] as? Bool == true, "a valid group should be recreated")
+        expect(
+            openedGroup?.title == "Research" && openedGroup?.color == "blue" && openedGroup?.collapsed == true,
+            "group metadata should reach the destination")
+        groupedResult = false
+        let ungrouped = bridge.handle(groupRequest, callerExtensionID: NativeHostRegistration.storeExtensionID)
+        expect(
+            ungrouped["ok"] as? Bool == true && ungrouped["grouped"] as? Bool == false,
+            "the native helper should report a URL-only fallback")
+        var invalidGroup = groupRequest
+        invalidGroup["group"] = ["title": "Research", "color": "not-a-color", "collapsed": true]
+        expect(
+            bridge.handle(invalidGroup, callerExtensionID: NativeHostRegistration.storeExtensionID)["error"] as? String
+                == "invalid_request",
+            "invalid group metadata must not be launched")
+
+        func receiverPreferences(version: String, nativeAccess: Bool) -> Data {
+            try! JSONSerialization.data(withJSONObject: [
+                "extensions": [
+                    "settings": [
+                        NativeHostRegistration.storeExtensionID: [
+                            "manifest": ["version": version],
+                            "disable_reasons": [],
+                            "active_permissions": ["api": nativeAccess ? ["nativeMessaging"] : []],
+                        ]
+                    ]
+                ]
+            ])
+        }
+        expect(
+            GroupReceiverAvailability.supportsReceiver(
+                receiverPreferences(version: "1.8.0", nativeAccess: true),
+                extensionID: NativeHostRegistration.storeExtensionID), "a capable destination should receive groups")
+        expect(
+            !GroupReceiverAvailability.supportsReceiver(
+                receiverPreferences(version: "1.7.0", nativeAccess: true),
+                extensionID: NativeHostRegistration.storeExtensionID),
+            "an older extension should use the URL-only fallback")
+        expect(
+            !GroupReceiverAvailability.supportsReceiver(
+                receiverPreferences(version: "1.8.0", nativeAccess: false),
+                extensionID: NativeHostRegistration.storeExtensionID),
+            "a profile without native access should use the URL-only fallback")
+
+        let relay = try! GroupRelay(payload: ["urls": ["https://example.com/"], "group": ["title": "Research"]])
+        let relayFinished = DispatchSemaphore(value: 0)
+        let relayState = NSLock()
+        var relayCompleted = false
+        DispatchQueue.global().async {
+            defer { relayFinished.signal() }
+            do {
+                let claimed = try relay.awaitClaim(seconds: 2)
+                let completed = try relay.awaitCompletion(seconds: 2)
+                relayState.lock()
+                relayCompleted = claimed && completed
+                relayState.unlock()
+            } catch {}
+        }
+        let claim = try! GroupRelay.request(token: relay.token, message: ["type": "claim"])
+        expect((claim["urls"] as? [String]) == ["https://example.com/"], "the receiver should get the pending URLs")
+        let completion = try! GroupRelay.request(token: relay.token, message: ["type": "complete", "ok": true])
+        expect(completion["ok"] as? Bool == true, "the receiver should get a completion acknowledgement")
+        expect(relayFinished.wait(timeout: .now() + 2) == .success, "the source should finish the handoff")
+        relayState.lock()
+        let didComplete = relayCompleted
+        relayState.unlock()
+        expect(didComplete, "the source should observe the receiver's claim and completion")
+
+        let expiredRelay = try! GroupRelay(payload: [:])
+        expect(try! !expiredRelay.awaitClaim(seconds: 0), "an absent receiver should allow a URL-only fallback")
+        expiredRelay.closeListening()
+        expect(
+            (try? GroupRelay.request(token: expiredRelay.token, message: ["type": "claim"])) == nil,
+            "a receiver arriving after fallback must not claim the group")
 
         let manifest = try! NativeHostRegistration.manifest(
             hostName: NativeHostRegistration.productionHostName,

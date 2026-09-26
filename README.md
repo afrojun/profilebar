@@ -19,9 +19,23 @@ ProfileBar puts your Chrome profiles in the macOS menu bar. Click a profile avat
 
 If that profile already has a window open, ProfileBar brings it forward, even from another desktop Space. If it does not, ProfileBar opens the profile normally.
 
-With [Instant Copy URL](https://chromewebstore.google.com/detail/instant-copy-url/dhalfjnfoocnfpppmkpidbliccemicno), you can right-click a page or tab, choose **Move tab to profile**, and open its URL in a selected Chrome profile. The extension closes the original tab after ProfileBar reports success. Enable the optional ProfileBar integration from that menu the first time. ProfileBar registers the local Chrome helper when it launches. If the extension cannot find it, launch ProfileBar and choose **Refresh profiles** from the extension menu.
+With [Instant Copy URL](https://chromewebstore.google.com/detail/instant-copy-url/dhalfjnfoocnfpppmkpidbliccemicno),
+you can right-click a page and choose **Move tab to profile**, or right-click a
+tab and choose **Copy or move tabs**, to open URLs in another Chrome profile.
+The extension closes the original tabs after ProfileBar reports success. Enable
+the optional ProfileBar integration from the extension's setup page or menu the
+first time. ProfileBar registers the local Chrome helper when it launches. If
+the extension cannot find it, launch ProfileBar and choose **Refresh profiles**
+from the extension menu.
 
-Select several tabs and right-click one of them to move their URLs together. Instant Copy URL reads the selected URLs, ProfileBar opens them in tab order, and the extension closes the originals after the handoff. Tab group names and colours are not recreated in the destination profile.
+Select several tabs and right-click one of them to move their URLs together.
+Instant Copy URL reads the selected URLs, ProfileBar opens them in tab order,
+and the extension closes the originals after the handoff. To move a whole tab
+group, right-click a tab inside it and choose **Move group to [profile]**. If
+Instant Copy URL 1.8.0 or newer is installed with ProfileBar access enabled in
+the destination profile, it recreates the group title, colour, and collapsed
+state. Otherwise, ProfileBar opens the URLs without a group. **Copy group URLs**
+copies every URL in the group without moving it.
 
 ## Use it
 
@@ -60,7 +74,15 @@ Current releases require macOS 14 or later and an Apple silicon Mac.
 
 Chrome does not provide a public API for bringing a specific profile window to the front. ProfileBar uses macOS Accessibility to raise a matching window first. If there is no window, it tries Chrome's profile command without showing the menu.
 
-ProfileBar reads Chrome's local profile list and saved avatars. For an explicit **Move tab to profile** action, its local helper receives the selected URLs and profile directory from the extension and passes them to Chrome. It does not store the URLs or send profile data to a server. Ordinary profile switching never uses the current page URL. ProfileBar does not bypass macOS permission controls.
+ProfileBar reads Chrome's local profile list and saved avatars. Its helper checks
+the focused Chrome window title to identify the current profile for the
+extension menu; when it cannot identify one uniquely, the extension shows every
+profile. For an explicit tab or group move, the helper receives the selected
+URLs and profile directory from the extension and passes them to Chrome. Group
+moves also carry the visible group details through a temporary local relay when
+the destination extension can receive them. ProfileBar does not store the URLs
+or send profile data to a server. Ordinary profile switching never uses the
+current page URL. ProfileBar does not bypass macOS permission controls.
 
 ## Limitations
 
