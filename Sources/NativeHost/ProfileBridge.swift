@@ -2,17 +2,27 @@ import Foundation
 
 struct ProfileBridge {
     let loadProfiles: () throws -> [ChromeProfile]
+    let focusedProfile: ([ChromeProfile]) -> ChromeProfile?
     let openURLs: (ChromeProfile, [URL]) throws -> Void
+    let openGroup: (ChromeProfile, [URL], TabGroupDetails, String) throws -> Bool
 
-    func handle(_ request: [String: Any]) -> [String: Any] {
+    func handle(_ request: [String: Any], callerExtensionID: String? = nil) -> [String: Any] {
         do {
-            switch request["type"] as? String {
+            let command = request["type"] as? String
+            switch command {
             case "listProfiles":
-                let profiles = try loadProfiles().map { ["directory": $0.directory, "name": $0.name] }
-                return ["ok": true, "profiles": profiles]
-            case "openURL", "openURLs":
+                let profiles = try loadProfiles()
+                var response: [String: Any] = [
+                    "ok": true,
+                    "profiles": profiles.map { ["directory": $0.directory, "name": $0.name] },
+                ]
+                if let current = focusedProfile(profiles) {
+                    response["focusedProfileDirectory"] = current.directory
+                }
+                return response
+            case "openURL", "openURLs", "openGroup":
                 let rawURLs: [String]?
-                if request["type"] as? String == "openURL" {
+                if command == "openURL" {
                     rawURLs = (request["url"] as? String).map { [$0] }
                 } else {
                     rawURLs = request["urls"] as? [String]
@@ -39,6 +49,16 @@ struct ProfileBridge {
                 guard let profile = try loadProfiles().first(where: { $0.directory == directory }) else {
                     return failure("profile_not_found")
                 }
+                if command == "openGroup" {
+                    guard
+                        let group = TabGroupDetails.parse(request["group"]),
+                        let callerExtensionID,
+                        callerExtensionID.count == 32,
+                        callerExtensionID.allSatisfy({ ("a"..."p").contains(String($0)) })
+                    else { return failure("invalid_request") }
+                    let grouped = try openGroup(profile, urls, group, callerExtensionID)
+                    return ["ok": true, "grouped": grouped]
+                }
                 try openURLs(profile, urls)
                 return ["ok": true]
             default:
@@ -51,6 +71,28 @@ struct ProfileBridge {
 
     private func failure(_ code: String) -> [String: Any] {
         ["ok": false, "error": code]
+    }
+}
+
+struct TabGroupDetails {
+    let title: String
+    let color: String
+    let collapsed: Bool
+
+    static func parse(_ value: Any?) -> Self? {
+        guard
+            let object = value as? [String: Any],
+            let title = object["title"] as? String,
+            title.utf8.count <= 256,
+            let color = object["color"] as? String,
+            ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"].contains(color),
+            let collapsed = object["collapsed"] as? Bool
+        else { return nil }
+        return Self(title: title, color: color, collapsed: collapsed)
+    }
+
+    var dictionary: [String: Any] {
+        ["title": title, "color": color, "collapsed": collapsed]
     }
 }
 

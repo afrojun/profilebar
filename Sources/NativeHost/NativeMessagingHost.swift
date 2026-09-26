@@ -11,8 +11,23 @@ struct NativeMessagingHost {
             guard length > 0 && length <= 131_072 else { return }
             guard let data = try readExactly(Int(length)) else { return }
             let request = (try JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-            let bridge = ProfileBridge(loadProfiles: ChromeProfileStore.load, openURLs: ChromeURLLauncher.open)
-            let response = bridge.handle(request)
+            let response: [String: Any]
+            if ["claimGroup", "completeGroup"].contains(request["type"] as? String ?? "") {
+                response = GroupHandoff.handleReceiverRequest(request)
+            } else {
+                let origin = CommandLine.arguments.dropFirst().first ?? ""
+                let extensionID =
+                    origin.hasPrefix("chrome-extension://") && origin.hasSuffix("/")
+                    ? String(origin.dropFirst("chrome-extension://".count).dropLast())
+                    : nil
+                let bridge = ProfileBridge(
+                    loadProfiles: ChromeProfileStore.load,
+                    focusedProfile: ChromeFocusedProfile.detect,
+                    openURLs: ChromeURLLauncher.open,
+                    openGroup: GroupHandoff.open
+                )
+                response = bridge.handle(request, callerExtensionID: extensionID)
+            }
             let responseData = try JSONSerialization.data(withJSONObject: response)
             let responseLength = UInt32(responseData.count)
             let responseHeader = Data((0..<4).map { UInt8((responseLength >> ($0 * 8)) & 0xff) })

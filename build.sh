@@ -84,8 +84,12 @@ swiftc -target "arm64-apple-macos${minimum_macos_version}" -O -warnings-as-error
   "$project_dir/Sources/ProfileBar/main.swift" \
   -o "$contents_dir/MacOS/ProfileBar"
 swiftc -target "arm64-apple-macos${minimum_macos_version}" -O -warnings-as-errors \
+  -framework AppKit -framework ApplicationServices \
   "$project_dir/Sources/ProfileBar/ChromeProfile.swift" \
+  "$project_dir/Sources/ProfileBar/ChromeWindowTitleMatcher.swift" \
+  "$project_dir/Sources/NativeHost/ChromeFocusedProfile.swift" \
   "$project_dir/Sources/NativeHost/ProfileBridge.swift" \
+  "$project_dir/Sources/NativeHost/GroupHandoff.swift" \
   "$project_dir/Sources/NativeHost/NativeMessagingHost.swift" \
   -o "$contents_dir/MacOS/ProfileBarNativeHost"
 
