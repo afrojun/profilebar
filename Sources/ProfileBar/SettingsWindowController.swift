@@ -43,7 +43,7 @@ final class SettingsWindowController: NSWindowController {
     private static let websiteURL = URL(string: "https://afrojun.dev/profilebar/")!
     private static let moveTabsGuideURL = URL(string: "https://afrojun.dev/profilebar/#move-tabs")!
     private static let extensionURL = URL(
-        string: "https://chromewebstore.google.com/detail/instant-copy-url/dhalfjnfoocnfpppmkpidbliccemicno")!
+        string: "https://chromewebstore.google.com/detail/\(NativeHostRegistration.storeExtensionID)")!
     private static let repositoryURL = URL(string: "https://github.com/afrojun/profilebar")!
     private static let helpURL = repositoryURL.appending(path: "issues/new/choose")
 
@@ -185,8 +185,8 @@ final class SettingsWindowController: NSWindowController {
 
     private func makeMoveTabsSection() -> NSView {
         let description = Self.detail(
-            "Move a page to another Chrome profile from the Instant Copy URL right-click menu.")
-        let extensionLink = linkButton("Get Instant Copy URL", action: #selector(openExtensionStore))
+            "Move tabs and tab groups to another Chrome profile from the ProfileBar for Chrome right-click menu.")
+        let extensionLink = linkButton("Get ProfileBar for Chrome", action: #selector(openExtensionStore))
         let guideLink = linkButton("How it works", action: #selector(openMoveTabsGuide))
         let links = NSStackView(views: [extensionLink, guideLink])
         links.orientation = .horizontal

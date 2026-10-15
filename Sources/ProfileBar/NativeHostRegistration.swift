@@ -3,7 +3,7 @@ import Foundation
 enum NativeHostRegistration {
     static let productionHostName = "dev.afrojun.profilebar"
     static let developmentHostName = "dev.afrojun.profilebar.dev"
-    static let storeExtensionID = "dhalfjnfoocnfpppmkpidbliccemicno"
+    static let storeExtensionID = "pkibfaoenoibogibnlkkpmgagjckjijh"
 
     static func installForCurrentApp() throws {
         if Bundle.main.bundleIdentifier == "dev.afrojun.ProfileBar.dev" {

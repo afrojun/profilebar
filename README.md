@@ -4,7 +4,7 @@
 
 <h1 align="center">ProfileBar</h1>
 
-<p align="center">Switch Chrome profiles instantly. Move pages between them with Instant Copy URL.</p>
+<p align="center">Switch Chrome profiles instantly. Move tabs between them with ProfileBar for Chrome.</p>
 
 <p align="center">
   <a href="https://afrojun.dev/profilebar/">Website</a> ·
@@ -19,9 +19,24 @@ ProfileBar puts your Chrome profiles in the macOS menu bar. Click a profile avat
 
 If that profile already has a window open, ProfileBar brings it forward, even from another desktop Space. If it does not, ProfileBar opens the profile normally.
 
-With [Instant Copy URL](https://chromewebstore.google.com/detail/instant-copy-url/dhalfjnfoocnfpppmkpidbliccemicno), you can right-click a page or tab, choose **Move tab to profile**, and open its URL in a selected Chrome profile. The extension closes the original tab after ProfileBar reports success. Enable the optional ProfileBar integration from that menu the first time. ProfileBar registers the local Chrome helper when it launches. If the extension cannot find it, launch ProfileBar and choose **Refresh profiles** from the extension menu.
+## Move tabs between profiles
 
-Select several tabs and right-click one of them to move their URLs together. Instant Copy URL reads the selected URLs, ProfileBar opens them in tab order, and the extension closes the originals after the handoff. Tab group names and colours are not recreated in the destination profile.
+Install the [ProfileBar for Chrome](https://chromewebstore.google.com/detail/pkibfaoenoibogibnlkkpmgagjckjijh) extension to move tabs from the
+right-click menu. Right-click a page and choose **Move tab to profile**, or
+right-click a tab and choose **Move tabs to profile**. The extension closes the
+original tabs after ProfileBar reports success. ProfileBar registers the local
+Chrome helper when it launches. If the extension cannot find it, launch
+ProfileBar and choose **Refresh profiles** from the extension menu.
+
+Select several tabs and right-click one of them to move them together in tab
+order. To move a whole tab group, right-click a tab inside it and choose
+**Move group to [profile]**. If ProfileBar for Chrome is also installed in the
+destination profile, it recreates the group title, colour, and collapsed state.
+Otherwise, ProfileBar opens the URLs without a group.
+
+Chrome installs extensions per profile, so add ProfileBar for Chrome to each
+profile you move tabs from. To copy tab URLs, use
+[Instant Copy URL](https://afrojun.dev/instant-copy-url/).
 
 ## Use it
 
@@ -32,7 +47,7 @@ Open **Settings…** from the ProfileBar button to:
 - Set a global keyboard shortcut for each profile.
 - Choose which profile avatars stay in the menu bar.
 - Start ProfileBar automatically when you sign in.
-- Find Instant Copy URL and a guide to moving tabs between profiles.
+- Find ProfileBar for Chrome and a guide to moving tabs between profiles.
 
 <p align="center">
   <img src="docs/images/settings.png" width="720" alt="ProfileBar settings with Personal, Work, and Side project profiles">
@@ -60,7 +75,15 @@ Current releases require macOS 14 or later and an Apple silicon Mac.
 
 Chrome does not provide a public API for bringing a specific profile window to the front. ProfileBar uses macOS Accessibility to raise a matching window first. If there is no window, it tries Chrome's profile command without showing the menu.
 
-ProfileBar reads Chrome's local profile list and saved avatars. For an explicit **Move tab to profile** action, its local helper receives the selected URLs and profile directory from the extension and passes them to Chrome. It does not store the URLs or send profile data to a server. Ordinary profile switching never uses the current page URL. ProfileBar does not bypass macOS permission controls.
+ProfileBar reads Chrome's local profile list and saved avatars. Its helper checks
+the focused Chrome window title to identify the current profile for the
+extension menu; when it cannot identify one uniquely, the extension shows every
+profile. For an explicit tab or group move, the helper receives the selected
+URLs and profile directory from the extension and passes them to Chrome. Group
+moves also carry the visible group details through a temporary local relay when
+the destination extension can receive them. ProfileBar does not store the URLs
+or send profile data to a server. Ordinary profile switching never uses the
+current page URL. ProfileBar does not bypass macOS permission controls.
 
 ## Limitations
 

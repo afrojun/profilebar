@@ -10,6 +10,8 @@ swiftc -warnings-as-errors \
   "$project_dir/Sources/ProfileBar/ChromeProfile.swift" \
   "$project_dir/Sources/ProfileBar/NativeHostRegistration.swift" \
   "$project_dir/Sources/NativeHost/ProfileBridge.swift" \
+  "$project_dir/Sources/NativeHost/ChromeFocusedProfile.swift" \
+  "$project_dir/Sources/NativeHost/GroupHandoff.swift" \
   "$project_dir/Sources/ProfileBar/ChromeWindowTitleMatcher.swift" \
   "$project_dir/Sources/ProfileBar/ProfileBarSymbol.swift" \
   "$project_dir/Sources/ProfileBar/ProfileShortcut.swift" \

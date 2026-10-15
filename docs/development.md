@@ -20,11 +20,14 @@ The first switch explains why Accessibility access is needed and links to **Syst
 The default development build is written to `build/ProfileBar Dev.app`. It has its own bundle ID, preferences, Accessibility permission, login item, cool-world app icon, and three hollow menu-bar panels, so you can tell it apart from the release app. Quit the released app before running the development build to avoid duplicate menu-bar items and shortcut conflicts.
 
 The release app registers Chrome's native messaging host for the published
-Instant Copy URL extension when it launches. For an unpacked development
-extension, set `PROFILEBAR_DEV_EXTENSION_ID` to its 32-character Chrome
-extension ID before launching ProfileBar Dev. The development app then
-registers a separate `dev.afrojun.profilebar.dev` host. Restart Chrome or
-choose **Refresh profiles** from the extension menu after registration.
+ProfileBar for Chrome extension when it launches. For the unpacked development
+extension, run `python3 extension/scripts/build-dev.py`, load the printed folder
+from `chrome://extensions`, and set `PROFILEBAR_DEV_EXTENSION_ID` to its
+32-character ID before launching ProfileBar Dev. The development app then
+registers a separate `dev.afrojun.profilebar.dev` host, which unpacked builds
+use automatically. Restart Chrome or choose **Refresh profiles** from the
+extension menu after registration. The extension's own checks and release steps
+live in [extension/AGENTS.md](../extension/AGENTS.md).
 
 Development builds use the local `ProfileBar Local Signing` identity when available. Without it, the build uses an ad-hoc signature, which may cause macOS to ask for Accessibility permission after each rebuild.
 

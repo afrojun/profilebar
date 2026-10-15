@@ -22,6 +22,7 @@ ProfileBar is a native macOS menu-bar app. One action must switch to an open Chr
 - `ChromeProfileActivator.swift` owns normal switch-or-open activation.
 - `NativeHostRegistration.swift` registers Chrome's local native messaging host.
 - `Sources/NativeHost` handles explicit open-URL requests from the extension.
+- `extension/` is the ProfileBar for Chrome extension. It owns the move menus, the group receiver, and its setup page. Change the native messaging protocol and both of its ends in the same pull request. See [extension/AGENTS.md](extension/AGENTS.md).
 - `ChromeWindowTitleMatcher.swift` owns Chrome label matching and should remain independently testable.
 - `ProfileShortcut.swift` owns persisted shortcut values and profile-icon visibility.
 - `GlobalHotKeyRegistrar.swift` owns Carbon hotkey registration and dispatch only.

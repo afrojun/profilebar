@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Set up ProfileBar for Chrome</title>
+    <link rel="stylesheet" href="setup.css" />
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-label="How tab moves work">
+        <div class="brand">
+          <img src="icons/icon-128.png" alt="" width="54" height="54" />
+          <span>ProfileBar for Chrome</span>
+        </div>
+        <p>Move a tab, a selection, or a whole tab group to another Chrome profile.</p>
+        <figure>
+          <div class="move-demo" aria-hidden="true">
+            <div class="demo-tabs">
+              <div class="demo-tab">
+                <strong>Personal</strong>
+                <span class="demo-tab-content">
+                  <span class="demo-source-url">example.com</span>
+                  <span class="demo-source-closed">Tab closed</span>
+                </span>
+              </div>
+              <span class="demo-arrow">→</span>
+              <div class="demo-tab">
+                <strong>Work</strong>
+                <span class="demo-tab-content demo-target-url">example.com</span>
+              </div>
+            </div>
+            <div class="demo-menus">
+              <div class="demo-menu">
+                <div class="demo-menu-row demo-menu-parent">
+                  <img src="icons/icon-16.png" alt="" width="16" height="16" />
+                  <span>Move tab to profile</span>
+                  <span class="demo-chevron">›</span>
+                </div>
+                <div class="demo-menu-divider"></div>
+                <div class="demo-menu-row">Close</div>
+                <div class="demo-menu-row">Close other tabs</div>
+              </div>
+              <div class="demo-menu">
+                <div class="demo-menu-row demo-destination">Work</div>
+                <div class="demo-menu-row">Side project</div>
+                <div class="demo-menu-divider"></div>
+                <div class="demo-menu-row">Refresh profiles</div>
+              </div>
+            </div>
+          </div>
+          <figcaption>Choose Work. The page opens there, then the original tab closes.</figcaption>
+        </figure>
+      </section>
+
+      <section class="setup">
+        <p class="status" id="status" data-state="checking" role="status">Checking ProfileBar…</p>
+        <h1 id="heading">Connect ProfileBar</h1>
+        <p class="intro" id="intro">
+          This extension asks the ProfileBar app on your Mac to open pages in
+          another Chrome profile.
+        </p>
+
+        <ol id="steps">
+          <li>Install <a href="https://afrojun.dev/profilebar/">ProfileBar</a> 1.4 or later.</li>
+          <li>Open ProfileBar once so it can connect to Chrome.</li>
+          <li>Come back here and choose <strong>Check again</strong>. If ProfileBar is still not found, restart Chrome.</li>
+        </ol>
+
+        <div class="actions">
+          <button id="check" type="button">Check again</button>
+          <a class="button-secondary" id="get-profilebar" href="https://afrojun.dev/profilebar/">Get ProfileBar</a>
+        </div>
+
+        <p class="note">
+          Install this extension in each Chrome profile you move tabs from. To
+          keep a group’s name and colour, install it in the destination profile
+          too.
+        </p>
+        <p class="help-links">
+          <a href="https://afrojun.dev/profilebar/#move-tabs">How tab moves work</a>
+          · <a href="https://github.com/afrojun/profilebar/issues/new/choose">Help &amp; feedback</a>
+        </p>
+      </section>
+    </main>
+
+    <script src="setup.js"></script>
+  </body>
+</html>

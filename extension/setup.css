@@ -1,0 +1,379 @@
+:root {
+  color-scheme: light;
+  font-family:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #172033;
+  background: #f7f8fc;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+main {
+  width: min(1040px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(400px, 0.9fr);
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #dfe3ec;
+  border-radius: 24px;
+  box-shadow: 0 24px 70px rgb(23 32 51 / 11%);
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+  padding: 40px;
+  color: #ffffff;
+  background: #172033;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.brand img {
+  width: 54px;
+  height: 54px;
+}
+
+.hero p {
+  max-width: 28ch;
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.45;
+  color: #dbe4f5;
+}
+
+.setup {
+  align-self: center;
+  padding: 36px 48px;
+}
+
+.status {
+  width: fit-content;
+  margin: 0 0 16px;
+  padding: 7px 11px;
+  color: #45536a;
+  background: #eef1f5;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.status[data-state="setup"],
+.status[data-state="error"] {
+  color: #7a3e00;
+  background: #fff0db;
+}
+
+.status[data-state="ready"] {
+  color: #0d652d;
+  background: #e6f4ea;
+}
+
+h1 {
+  max-width: 14ch;
+  margin: 0;
+  font-size: clamp(32px, 4vw, 42px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.intro {
+  max-width: 52ch;
+  margin: 16px 0 22px;
+  color: #5f6368;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+ol {
+  margin: 0 0 24px;
+  padding-left: 22px;
+}
+
+li {
+  padding-left: 7px;
+  line-height: 1.5;
+}
+
+li + li {
+  margin-top: 6px;
+}
+
+button {
+  min-height: 44px;
+  padding: 0 18px;
+  color: #ffffff;
+  background: #3157f6;
+  border: 0;
+  border-radius: 8px;
+  font: 650 15px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #2447db;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+button:focus-visible {
+  outline: 3px solid #8ab4f8;
+  outline-offset: 3px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.button-secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  color: #2447db;
+  border: 1px solid #c9d3ee;
+  border-radius: 8px;
+  font: 650 15px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif;
+  text-decoration: none;
+}
+
+.button-secondary:hover {
+  background: #f2f5fe;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.note,
+.help-links {
+  max-width: 52ch;
+  margin: 24px 0 0;
+  color: #5f6368;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.help-links {
+  margin-top: 10px;
+}
+
+.setup a:not(.button-secondary) {
+  color: #2447db;
+}
+
+.hero figure {
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+}
+
+.move-demo {
+  min-width: 420px;
+  padding: 14px;
+  color: #eeeef1;
+  background: #191a1e;
+  border: 1px solid #43454c;
+  border-radius: 12px;
+  font-size: 14px;
+  --demo-cycle: 8s;
+}
+
+.demo-tabs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.demo-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 9px;
+  background: #292b31;
+  border: 1px solid #4b4e56;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.demo-tab strong {
+  flex: none;
+  color: #ffffff;
+}
+
+.demo-tab-content {
+  display: grid;
+  min-width: 0;
+  color: #c7ccd7;
+}
+
+.demo-tab-content span {
+  grid-area: 1 / 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.demo-source-url {
+  animation: source-leaves var(--demo-cycle) infinite;
+}
+
+.demo-source-closed,
+.demo-target-url {
+  opacity: 0;
+  animation: destination-opens var(--demo-cycle) infinite;
+}
+
+.demo-arrow {
+  color: #8ab4f8;
+  text-align: center;
+  opacity: 0.35;
+  animation: arrow-active var(--demo-cycle) infinite;
+}
+
+.demo-menus {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: start;
+  gap: 6px;
+}
+
+.demo-menu {
+  padding: 6px;
+  background: #222327;
+  border: 1px solid #565860;
+  border-radius: 10px;
+}
+
+.demo-menu-row {
+  display: flex;
+  align-items: center;
+  min-height: 27px;
+  padding: 3px 9px;
+  white-space: nowrap;
+  border-radius: 6px;
+}
+
+.demo-menu-parent {
+  gap: 8px;
+  background: #393b42;
+  font-weight: 650;
+}
+
+.demo-chevron {
+  margin-left: auto;
+  font-size: 22px;
+  line-height: 0;
+}
+
+.demo-menu-divider {
+  height: 1px;
+  margin: 5px 9px;
+  background: #55575d;
+}
+
+.demo-destination {
+  animation: select-profile var(--demo-cycle) infinite;
+}
+
+@keyframes select-profile {
+  0%, 19%, 92%, 100% { background: transparent; }
+  21%, 85% { background: #2165b0; }
+}
+
+@keyframes source-leaves {
+  0%, 48%, 92%, 100% { opacity: 1; }
+  55%, 85% { opacity: 0; }
+}
+
+@keyframes destination-opens {
+  0%, 48%, 92%, 100% { opacity: 0; }
+  55%, 85% { opacity: 1; }
+}
+
+@keyframes arrow-active {
+  0%, 48%, 92%, 100% { opacity: 0.35; }
+  55%, 85% { opacity: 1; }
+}
+
+.hero figcaption {
+  margin-top: 10px;
+  color: #b8c3d9;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-source-url {
+    opacity: 0;
+    animation: none;
+  }
+
+  .demo-source-closed,
+  .demo-target-url,
+  .demo-arrow {
+    opacity: 1;
+    animation: none;
+  }
+
+  .demo-destination {
+    background: #2165b0;
+    animation: none;
+  }
+}
+
+code {
+  user-select: all;
+  color: #202124;
+}
+
+@media (max-width: 820px) {
+  body {
+    display: block;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  main {
+    min-height: 100vh;
+    grid-template-columns: 1fr;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .hero,
+  .setup {
+    padding: 40px 28px;
+  }
+
+}
