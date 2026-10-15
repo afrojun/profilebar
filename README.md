@@ -4,7 +4,7 @@
 
 <h1 align="center">ProfileBar</h1>
 
-<p align="center">Switch Chrome profiles instantly. Move pages between them with Instant Copy URL.</p>
+<p align="center">Switch Chrome profiles instantly. Move tabs between them with ProfileBar for Chrome.</p>
 
 <p align="center">
   <a href="https://afrojun.dev/profilebar/">Website</a> ·
@@ -19,23 +19,24 @@ ProfileBar puts your Chrome profiles in the macOS menu bar. Click a profile avat
 
 If that profile already has a window open, ProfileBar brings it forward, even from another desktop Space. If it does not, ProfileBar opens the profile normally.
 
-With [Instant Copy URL](https://chromewebstore.google.com/detail/instant-copy-url/dhalfjnfoocnfpppmkpidbliccemicno),
-you can right-click a page and choose **Move tab to profile**, or right-click a
-tab and choose **Copy or move tabs**, to open URLs in another Chrome profile.
-The extension closes the original tabs after ProfileBar reports success. Enable
-the optional ProfileBar integration from the extension's setup page or menu the
-first time. ProfileBar registers the local Chrome helper when it launches. If
-the extension cannot find it, launch ProfileBar and choose **Refresh profiles**
-from the extension menu.
+## Move tabs between profiles
 
-Select several tabs and right-click one of them to move their URLs together.
-Instant Copy URL reads the selected URLs, ProfileBar opens them in tab order,
-and the extension closes the originals after the handoff. To move a whole tab
-group, right-click a tab inside it and choose **Move group to [profile]**. If
-Instant Copy URL 1.8.0 or newer is installed with ProfileBar access enabled in
-the destination profile, it recreates the group title, colour, and collapsed
-state. Otherwise, ProfileBar opens the URLs without a group. **Copy group URLs**
-copies every URL in the group without moving it.
+Install the [ProfileBar for Chrome](https://chromewebstore.google.com/detail/pkibfaoenoibogibnlkkpmgagjckjijh) extension to move tabs from the
+right-click menu. Right-click a page and choose **Move tab to profile**, or
+right-click a tab and choose **Move tabs to profile**. The extension closes the
+original tabs after ProfileBar reports success. ProfileBar registers the local
+Chrome helper when it launches. If the extension cannot find it, launch
+ProfileBar and choose **Refresh profiles** from the extension menu.
+
+Select several tabs and right-click one of them to move them together in tab
+order. To move a whole tab group, right-click a tab inside it and choose
+**Move group to [profile]**. If ProfileBar for Chrome is also installed in the
+destination profile, it recreates the group title, colour, and collapsed state.
+Otherwise, ProfileBar opens the URLs without a group.
+
+Chrome installs extensions per profile, so add ProfileBar for Chrome to each
+profile you move tabs from. To copy tab URLs, use
+[Instant Copy URL](https://afrojun.dev/instant-copy-url/).
 
 ## Use it
 
@@ -46,7 +47,7 @@ Open **Settings…** from the ProfileBar button to:
 - Set a global keyboard shortcut for each profile.
 - Choose which profile avatars stay in the menu bar.
 - Start ProfileBar automatically when you sign in.
-- Find Instant Copy URL and a guide to moving tabs between profiles.
+- Find ProfileBar for Chrome and a guide to moving tabs between profiles.
 
 <p align="center">
   <img src="docs/images/settings.png" width="720" alt="ProfileBar settings with Personal, Work, and Side project profiles">

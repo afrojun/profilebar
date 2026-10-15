@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Move tab screenshot</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        width: 1280px; height: 800px; margin: 0; overflow: hidden;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #172033; background: #f7f8fc;
+      }
+      .chrome { height: 96px; background: #ffffff; border-bottom: 1px solid #e3e6ee; }
+      .tabs { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 20px; }
+      .lights { display: flex; gap: 8px; margin-right: 18px; }
+      .lights span { width: 12px; height: 12px; border-radius: 50%; }
+      .tab {
+        display: flex; align-items: center; gap: 10px; width: 250px; height: 32px; padding: 0 14px;
+        font-size: 14px; font-weight: 650; background: #eef1f6; border-radius: 10px;
+      }
+      .tab.inactive { color: #6b7385; font-weight: 500; background: transparent; }
+      .favicon { width: 14px; height: 14px; border-radius: 4px; background: #3157f6; }
+      .toolbar { display: flex; align-items: center; gap: 16px; height: 50px; padding: 0 20px; color: #6b7385; }
+      .address { flex: 1; height: 32px; padding: 0 16px; line-height: 32px; font-size: 14px; background: #eef1f6; border-radius: 16px; }
+      .avatar {
+        display: grid; width: 30px; height: 30px; place-items: center; color: #fff;
+        font-size: 13px; font-weight: 700; background: #e8710a; border-radius: 50%;
+      }
+      .page { position: relative; padding: 150px 96px; }
+      .eyebrow { margin: 0 0 14px; color: #e8710a; font-size: 15px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+      h1 { max-width: 11ch; margin: 0; font-size: 58px; line-height: 1.05; letter-spacing: -0.035em; }
+      .lede { max-width: 40ch; margin: 22px 0 40px; color: #5f6880; font-size: 22px; line-height: 1.45; }
+      .line { height: 12px; margin-bottom: 18px; background: #e3e7ef; border-radius: 6px; }
+      .menu {
+        position: absolute; padding: 6px; font-size: 15px;
+        background: #ffffff; border: 1px solid #d5d9e2; border-radius: 10px;
+        box-shadow: 0 18px 50px rgb(23 32 51 / 18%);
+      }
+      .row { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 12px; white-space: nowrap; border-radius: 6px; }
+      .row.muted { color: #9aa1b0; }
+      .row.active { color: #fff; background: #2f6fe4; }
+      .row img { width: 16px; height: 16px; }
+      .chevron { margin-left: auto; padding-left: 28px; font-size: 18px; }
+      .divider { height: 1px; margin: 6px 10px; background: #e3e6ee; }
+      .dot { width: 10px; height: 10px; border-radius: 50%; }
+    </style>
+  </head>
+  <body>
+    <div class="chrome">
+      <div class="tabs">
+        <div class="lights"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></div>
+        <div class="tab"><span class="favicon"></span>Quarterly roadmap</div>
+        <div class="tab inactive"><span class="favicon" style="background:#9aa1b0"></span>Weekend plans</div>
+      </div>
+      <div class="toolbar">
+        <span>‹</span><span>›</span>
+        <div class="address">docs.example.com/roadmap</div>
+        <div class="avatar">P</div>
+      </div>
+    </div>
+    <div class="page">
+      <p class="eyebrow">Opened in Personal</p>
+      <h1>Wrong profile? Move it in two clicks.</h1>
+      <p class="lede">Right-click the page, choose a profile, and the tab moves there. The original closes once it opens.</p>
+      <div class="line" style="width: 560px"></div>
+      <div class="line" style="width: 620px"></div>
+      <div class="line" style="width: 500px"></div>
+
+      <div class="menu" style="left: 700px; top: 110px; width: 280px">
+        <div class="row">Back</div>
+        <div class="row muted">Forward</div>
+        <div class="row">Reload</div>
+        <div class="divider"></div>
+        <div class="row">Save as…</div>
+        <div class="row">Print…</div>
+        <div class="divider"></div>
+        <div class="row active"><img src="../icons/icon-16.png" alt="" />Move tab to profile<span class="chevron">›</span></div>
+        <div class="divider"></div>
+        <div class="row">Inspect</div>
+      </div>
+      <div class="menu" style="left: 986px; top: 298px; width: 220px">
+        <div class="row active"><span class="dot" style="background:#ffffff"></span>Work</div>
+        <div class="row"><span class="dot" style="background:#7c4dff"></span>Side project</div>
+        <div class="divider"></div>
+        <div class="row">Refresh profiles</div>
+      </div>
+    </div>
+  </body>
+</html>

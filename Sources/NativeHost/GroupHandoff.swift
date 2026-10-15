@@ -69,23 +69,7 @@ enum GroupReceiverAvailability {
             let api = permissions["api"] as? [String],
             api.contains("nativeMessaging")
         else { return false }
-
-        let version =
-            (installed["manifest"] as? [String: Any])?["version"] as? String
-            ?? unpackedVersion(installed["path"] as? String)
-        guard let version else { return false }
-        let parts = version.split(separator: ".").compactMap { Int($0) }
-        return parts.count >= 3 && !parts.prefix(3).lexicographicallyPrecedes([1, 8, 0])
-    }
-
-    private static func unpackedVersion(_ path: String?) -> String? {
-        guard let path, path.hasPrefix("/") else { return nil }
-        let manifest = URL(fileURLWithPath: path).appendingPathComponent("manifest.json")
-        guard
-            let data = try? Data(contentsOf: manifest),
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        return object["version"] as? String
+        return true
     }
 }
 

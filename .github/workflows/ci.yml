@@ -77,3 +77,33 @@ jobs:
           trap cleanup EXIT
           [[ "$(readlink "$mount/Applications")" == "/Applications" ]]
           codesign --verify --deep --strict --verbose=2 "$mount/ProfileBar.app"
+
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: extension
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Test
+        run: node --test
+
+      - name: Check scripts
+        run: |
+          for file in *.js; do node --check "$file"; done
+          python3 -m py_compile scripts/build-dev.py
+          bash -n scripts/publish.sh
+          sh -n scripts/package.sh
+
+      - name: Package
+        run: unzip -t "$(./scripts/package.sh)"

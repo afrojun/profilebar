@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Small promo tile</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        display: flex; flex-direction: column; justify-content: center; gap: 22px;
+        width: 440px; height: 280px; margin: 0; padding: 0 34px; overflow: hidden;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #ffffff; background: #172033;
+      }
+      .brand { display: flex; align-items: center; gap: 18px; }
+      .brand img { width: 84px; height: 84px; }
+      h1 { margin: 0; font-size: 28px; line-height: 1.1; letter-spacing: -0.02em; }
+      p { margin: 6px 0 0; color: #b8c3d9; font-size: 16px; }
+      .move { display: flex; align-items: center; gap: 12px; font-size: 15px; font-weight: 650; }
+      .chip { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: #263149; border-radius: 999px; }
+      .dot { width: 10px; height: 10px; border-radius: 50%; }
+      .arrow { color: #8ab4f8; font-size: 20px; }
+    </style>
+  </head>
+  <body>
+    <div class="brand">
+      <img src="../icons/icon-128.png" alt="" />
+      <div>
+        <h1>ProfileBar<br />for Chrome</h1>
+        <p>Move tabs between profiles.</p>
+      </div>
+    </div>
+    <div class="move">
+      <span class="chip"><span class="dot" style="background:#e8710a"></span>Personal</span>
+      <span class="arrow">→</span>
+      <span class="chip"><span class="dot" style="background:#2f6fe4"></span>Work</span>
+    </div>
+  </body>
+</html>

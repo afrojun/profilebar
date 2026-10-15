@@ -208,13 +208,13 @@ struct ProfileBarTests {
                 == "invalid_request",
             "invalid group metadata must not be launched")
 
-        func receiverPreferences(version: String, nativeAccess: Bool) -> Data {
+        func receiverPreferences(nativeAccess: Bool, disabled: Bool = false) -> Data {
             try! JSONSerialization.data(withJSONObject: [
                 "extensions": [
                     "settings": [
                         NativeHostRegistration.storeExtensionID: [
-                            "manifest": ["version": version],
-                            "disable_reasons": [],
+                            "manifest": ["version": "1.0.0"],
+                            "disable_reasons": disabled ? [1] : [],
                             "active_permissions": ["api": nativeAccess ? ["nativeMessaging"] : []],
                         ]
                     ]
@@ -223,16 +223,16 @@ struct ProfileBarTests {
         }
         expect(
             GroupReceiverAvailability.supportsReceiver(
-                receiverPreferences(version: "1.8.0", nativeAccess: true),
+                receiverPreferences(nativeAccess: true),
                 extensionID: NativeHostRegistration.storeExtensionID), "a capable destination should receive groups")
         expect(
             !GroupReceiverAvailability.supportsReceiver(
-                receiverPreferences(version: "1.7.0", nativeAccess: true),
+                receiverPreferences(nativeAccess: true, disabled: true),
                 extensionID: NativeHostRegistration.storeExtensionID),
-            "an older extension should use the URL-only fallback")
+            "a disabled extension should use the URL-only fallback")
         expect(
             !GroupReceiverAvailability.supportsReceiver(
-                receiverPreferences(version: "1.8.0", nativeAccess: false),
+                receiverPreferences(nativeAccess: false),
                 extensionID: NativeHostRegistration.storeExtensionID),
             "a profile without native access should use the URL-only fallback")
 
@@ -275,7 +275,7 @@ struct ProfileBarTests {
         let manifestObject = try! JSONSerialization.jsonObject(with: manifest) as! [String: Any]
         expect(
             (manifestObject["allowed_origins"] as? [String]) == [
-                "chrome-extension://dhalfjnfoocnfpppmkpidbliccemicno/"
+                "chrome-extension://pkibfaoenoibogibnlkkpmgagjckjijh/"
             ],
             "only the published extension should reach the production helper"
         )
