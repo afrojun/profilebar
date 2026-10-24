@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 
 enum ChromeProfileActivator {
-    static func activate(_ profile: ChromeProfile) throws {
+    static func activate(_ profile: ChromeProfile, among profiles: [ChromeProfile]) throws {
         let chromeApplications = NSRunningApplication.runningApplications(withBundleIdentifier: "com.google.Chrome")
         guard !chromeApplications.isEmpty else {
             try launch(profile)
@@ -13,7 +13,10 @@ enum ChromeProfileActivator {
             throw ProfileBarError.accessibilityAccessRequired
         }
 
-        for chrome in chromeApplications {
+        // Chrome titles the windows of same-named profiles identically, so only the position of
+        // the profile's entry in Chrome's Profiles menu tells them apart.
+        let namesakes = ChromeWindowTitleMatcher.profilesSharingLabel(with: profile, in: profiles)
+        for chrome in chromeApplications where namesakes.count == 1 {
             let application = AXUIElementCreateApplication(chrome.processIdentifier)
             if let window = windows(of: application).first(where: {
                 ChromeWindowTitleMatcher.matches(
@@ -27,10 +30,11 @@ enum ChromeProfileActivator {
             }
         }
 
+        let occurrence = namesakes.firstIndex(of: profile) ?? 0
         for chrome in chromeApplications {
             let application = AXUIElementCreateApplication(chrome.processIdentifier)
             guard !windows(of: application).isEmpty else { continue }
-            if pressProfileMenuItem(for: profile, in: application) {
+            if pressProfileMenuItem(for: profile, occurrence: occurrence, in: application) {
                 chrome.activate()
                 return
             }
@@ -39,23 +43,26 @@ enum ChromeProfileActivator {
         try launch(profile)
     }
 
-    private static func pressProfileMenuItem(for profile: ChromeProfile, in application: AXUIElement) -> Bool {
+    private static func pressProfileMenuItem(
+        for profile: ChromeProfile, occurrence: Int, in application: AXUIElement
+    ) -> Bool {
         guard
             let menuBar = elementAttribute(application, kAXMenuBarAttribute),
             let profilesMenu = elements(of: menuBar).first(where: {
                 stringAttribute($0, kAXTitleAttribute).caseInsensitiveCompare("Profiles") == .orderedSame
             }),
-            let menu = elements(of: profilesMenu).first,
-            let profileItem = elements(of: menu).first(where: {
-                ChromeWindowTitleMatcher.matchesProfileMenuItem(
-                    title: stringAttribute($0, kAXTitleAttribute),
-                    profileName: profile.name,
-                    personName: profile.personName
-                )
-            })
+            let menu = elements(of: profilesMenu).first
         else { return false }
 
-        return AXUIElementPerformAction(profileItem, kAXPressAction as CFString) == .success
+        let profileItems = elements(of: menu).filter {
+            ChromeWindowTitleMatcher.matchesProfileMenuItem(
+                title: stringAttribute($0, kAXTitleAttribute),
+                profileName: profile.name,
+                personName: profile.personName
+            )
+        }
+        guard profileItems.indices.contains(occurrence) else { return false }
+        return AXUIElementPerformAction(profileItems[occurrence], kAXPressAction as CFString) == .success
     }
 
     private static func launch(_ profile: ChromeProfile) throws {

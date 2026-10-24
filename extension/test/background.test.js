@@ -49,12 +49,19 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
       onClicked: { addListener(listener) { listeners.clicked = listener; } },
       removeAll(callback) { menus.length = 0; callback(); },
       create(item, callback) { menus.push(item); callback(); },
+      update(id, properties, callback) {
+        Object.assign(menus.find((item) => item.id === id), properties);
+        callback();
+      },
     },
     tabs: {
+      onAttached: { addListener(listener) { listeners.tabAttached = listener; } },
+      onDetached: { addListener(listener) { listeners.tabDetached = listener; } },
       async create(tab) { openedTabs.push(tab); },
-      async query({ highlighted, groupId, windowId }) {
-        return [...tabs.values()].filter((tab) => (!highlighted || tab.highlighted)
-          && (groupId === undefined || tab.groupId === groupId) && tab.windowId === windowId);
+      async query({ active, highlighted, groupId, windowId }) {
+        return [...tabs.values()].filter((tab) => (!active || tab.active) && (!highlighted || tab.highlighted)
+          && (groupId === undefined || tab.groupId === groupId)
+          && (windowId === undefined || tab.windowId === windowId));
       },
       async get(id) {
         if (!tabs.has(id)) throw new Error("Tab not found");
@@ -69,6 +76,8 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
       },
     },
     tabGroups: {
+      onCreated: { addListener(listener) { listeners.groupCreated = listener; } },
+      onRemoved: { addListener(listener) { listeners.groupRemoved = listener; } },
       async get(id) {
         if (!groups.has(id)) throw new Error("Group not found");
         return groups.get(id);
@@ -89,6 +98,8 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
     errors,
     get optionsOpened() { return optionsOpened; },
     refresh: () => vm.runInContext("refreshProfileMenu()", context),
+    settle: () => vm.runInContext("menuRefresh", context),
+    context,
     setFocused(value) { windowFocused = value; },
     setNativeError(error) { nativeError = error; },
     setCloseError(error) { closeError = error; },
@@ -141,6 +152,71 @@ test("a verified focused profile is omitted from both destination menus", async 
   assert.equal(harness.menus.filter((item) => item.id.startsWith("tab:profile:")).length, 2);
 });
 
+test("group moves appear only while the focused window has a group", async () => {
+  const harness = menuHarness({ hostResponse: { ok: true, profiles: [{ directory: "Profile 2", name: "Work" }] } });
+  const groupItemsVisible = () => harness.menus
+    .filter((item) => item.id === "tab:group-divider" || item.id.startsWith("group:"))
+    .map((item) => item.visible);
+  harness.setTab({ id: 1, windowId: 1, groupId: -1 });
+  await harness.refresh();
+  assert.deepEqual(groupItemsVisible(), [false, false]);
+
+  harness.setTab({ id: 2, windowId: 1, groupId: 7 });
+  harness.listeners.groupCreated({ id: 7, windowId: 1 });
+  await harness.settle();
+  assert.deepEqual(groupItemsVisible(), [true, true]);
+
+  harness.setTab({ id: 2, windowId: 1, groupId: -1 });
+  harness.listeners.groupRemoved({ id: 7, windowId: 1 });
+  await harness.settle();
+  assert.deepEqual(groupItemsVisible(), [false, false]);
+  assert.equal(harness.nativeMessages.length, 1, "visibility changes must not contact ProfileBar");
+});
+
+test("profiles that share a name are labelled by folder and reported to the setup page", async () => {
+  const harness = menuHarness({ hostResponse: { ok: true, profiles: [
+    { directory: "Profile 3", name: "Taylor" },
+    { directory: "Profile 5", name: "Taylor" },
+    { directory: "Profile 2", name: "Work" },
+  ] } });
+  const result = await vm.runInContext("buildProfileMenu()", harness.context);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(result.sharedNameProfiles)), [
+    { directory: "Profile 3", name: "Taylor" },
+    { directory: "Profile 5", name: "Taylor" },
+  ]);
+  assert.deepEqual(harness.menus.filter((item) => item.id.startsWith("profile:")).map((item) => item.title), [
+    "Taylor (Profile 3)", "Taylor (Profile 5)", "Work",
+  ]);
+});
+
+test("the setup page can ask ProfileBar to open another profile's settings", async () => {
+  const harness = menuHarness({ hostResponse: { ok: true, opened: true } });
+  const ask = async (message) => {
+    let response;
+    assert.equal(harness.listeners.message(message, {}, (value) => { response = value; }), true);
+    await new Promise(setImmediate);
+    return response.result;
+  };
+
+  assert.equal(await ask({ type: "open-profile-settings", profileDirectory: "Profile 5" }), "opened");
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.nativeMessages.at(-1))), {
+    host: "dev.afrojun.profilebar", message: { type: "openProfileSettings", profileDirectory: "Profile 5" },
+  });
+  assert.equal(harness.listeners.message({ type: "open-profile-settings" }, {}, () => {}), false);
+
+  const missing = menuHarness({ hostResponse: { ok: true, opened: false } });
+  let response;
+  missing.listeners.message({ type: "open-profile-settings", profileDirectory: "Profile 5" }, {}, (value) => { response = value; });
+  await new Promise(setImmediate);
+  assert.equal(response.result, "extension-missing");
+
+  const older = menuHarness({ hostResponse: { ok: false, error: "invalid_request" } });
+  older.listeners.message({ type: "open-profile-settings", profileDirectory: "Profile 5" }, {}, (value) => { response = value; });
+  await new Promise(setImmediate);
+  assert.equal(response.result, "update-required");
+});
+
 test("one known profile leaves refresh available", async () => {
   const harness = menuHarness({ hostResponse: {
     ok: true,
@@ -162,7 +238,7 @@ test("the setup page check refreshes the menu and reports the connection", async
   assert.equal(harness.listeners.message({ type: "check-profilebar" }, {}, (value) => { response = value; }), true);
   await new Promise(setImmediate);
 
-  assert.deepEqual({ ...response }, { state: "ready", destinationCount: 2 });
+  assert.deepEqual(JSON.parse(JSON.stringify(response)), { state: "ready", destinationCount: 2, sharedNameProfiles: [] });
   assert.ok(harness.menus.some((item) => item.id === "profile:Default"));
   assert.equal(harness.listeners.message({ type: "other" }, {}, () => {}), false);
 });

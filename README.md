@@ -32,7 +32,14 @@ Select several tabs and right-click one of them to move them together in tab
 order. To move a whole tab group, right-click a tab inside it and choose
 **Move group to [profile]**. If ProfileBar for Chrome is also installed in the
 destination profile, it recreates the group title, colour, and collapsed state.
-Otherwise, ProfileBar opens the URLs without a group.
+Otherwise, ProfileBar opens the URLs without a group. The group items appear
+while the window has a tab group, because Chrome does not tell extensions which
+tab was right-clicked until an item is chosen.
+
+Give each Chrome profile its own name. When two profiles share a name, the
+extension labels them by folder (such as Profile 3) and cannot tell which of
+them you are in. Its setup page offers a **Rename** button for each one, which
+opens that profile's Chrome settings.
 
 Chrome installs extensions per profile, so add ProfileBar for Chrome to each
 profile you move tabs from. To copy tab URLs, use

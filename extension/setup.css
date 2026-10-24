@@ -171,6 +171,45 @@ button:focus-visible {
   display: none !important;
 }
 
+.warning {
+  max-width: 52ch;
+  margin: 20px 0 0;
+  padding: 12px 14px;
+  color: #7a3e00;
+  background: #fff0db;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.warning p {
+  margin: 0;
+}
+
+.warning p:empty {
+  display: none;
+}
+
+.warning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.warning-actions button {
+  min-height: 34px;
+  padding: 0 12px;
+  color: #7a3e00;
+  background: #ffffff;
+  border: 1px solid #f0c48a;
+  font-size: 14px;
+}
+
+.warning-actions button:hover {
+  background: #fff8ee;
+}
+
 .note,
 .help-links {
   max-width: 52ch;

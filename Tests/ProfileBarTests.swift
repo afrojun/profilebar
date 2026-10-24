@@ -67,6 +67,21 @@ struct ProfileBarTests {
             ),
             "a shared person name must not identify a profile"
         )
+        let namesakeProfiles = [
+            try! ChromeProfile(directory: "Profile 5", name: "Taylor", personName: "Taylor"),
+            try! ChromeProfile(directory: "Default", name: "Work", personName: "Taylor"),
+            try! ChromeProfile(directory: "Profile 3", name: "Taylor", personName: nil),
+        ]
+        expect(
+            ChromeWindowTitleMatcher.profilesSharingLabel(with: namesakeProfiles[0], in: namesakeProfiles)
+                .map(\.directory) == ["Profile 3", "Profile 5"],
+            "same-named profiles should follow Chrome's Profiles menu order"
+        )
+        expect(
+            ChromeWindowTitleMatcher.profilesSharingLabel(with: namesakeProfiles[1], in: namesakeProfiles)
+                == [namesakeProfiles[1]],
+            "a uniquely named profile should share its label with no other profile"
+        )
         expect(
             ChromeWindowTitleMatcher.matches(
                 windowTitle: "  CALENDAR - GOOGLE CHROME — TAYLOR (WORK)  ",
@@ -132,6 +147,7 @@ struct ProfileBarTests {
         var openedURLs: [URL]?
         var openedGroup: TabGroupDetails?
         var groupedResult = true
+        var settingsProfile: ChromeProfile?
         let bridge = ProfileBridge(
             loadProfiles: { [workProfile] },
             focusedProfile: { _ in workProfile },
@@ -139,6 +155,10 @@ struct ProfileBarTests {
             openGroup: { _, _, group, _ in
                 openedGroup = group
                 return groupedResult
+            },
+            openProfileSettings: { profile, _ in
+                settingsProfile = profile
+                return true
             }
         )
         let listed = bridge.handle(["type": "listProfiles"])
@@ -201,6 +221,15 @@ struct ProfileBarTests {
         expect(
             ungrouped["ok"] as? Bool == true && ungrouped["grouped"] as? Bool == false,
             "the native helper should report a URL-only fallback")
+        let settingsRequest: [String: Any] = ["type": "openProfileSettings", "profileDirectory": "Profile 2"]
+        expect(
+            bridge.handle(settingsRequest)["error"] as? String == "invalid_request",
+            "a caller without an extension origin cannot open profile settings")
+        expect(settingsProfile == nil, "an untrusted settings request must not launch Chrome")
+        let settings = bridge.handle(settingsRequest, callerExtensionID: NativeHostRegistration.storeExtensionID)
+        expect(
+            settings["ok"] as? Bool == true && settings["opened"] as? Bool == true && settingsProfile == workProfile,
+            "profile settings should open in the requested profile")
         var invalidGroup = groupRequest
         invalidGroup["group"] = ["title": "Research", "color": "not-a-color", "collapsed": true]
         expect(
@@ -222,17 +251,17 @@ struct ProfileBarTests {
             ])
         }
         expect(
-            GroupReceiverAvailability.supportsReceiver(
-                receiverPreferences(nativeAccess: true),
+            ProfileExtensionAvailability.isEnabled(
+                preferences: receiverPreferences(nativeAccess: true),
                 extensionID: NativeHostRegistration.storeExtensionID), "a capable destination should receive groups")
         expect(
-            !GroupReceiverAvailability.supportsReceiver(
-                receiverPreferences(nativeAccess: true, disabled: true),
+            !ProfileExtensionAvailability.isEnabled(
+                preferences: receiverPreferences(nativeAccess: true, disabled: true),
                 extensionID: NativeHostRegistration.storeExtensionID),
             "a disabled extension should use the URL-only fallback")
         expect(
-            !GroupReceiverAvailability.supportsReceiver(
-                receiverPreferences(nativeAccess: false),
+            !ProfileExtensionAvailability.isEnabled(
+                preferences: receiverPreferences(nativeAccess: false),
                 extensionID: NativeHostRegistration.storeExtensionID),
             "a profile without native access should use the URL-only fallback")
 

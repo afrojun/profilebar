@@ -25,4 +25,17 @@ enum ChromeWindowTitleMatcher {
         return title.caseInsensitiveCompare(profileName) == .orderedSame
             || title.caseInsensitiveCompare(label) == .orderedSame
     }
+
+    /// Returns the profiles Chrome labels the same way as `profile`, including `profile`, in the
+    /// order Chrome lists them in its Profiles menu: by profile name, then by profile directory.
+    static func profilesSharingLabel(with profile: ChromeProfile, in profiles: [ChromeProfile]) -> [ChromeProfile] {
+        let label = profileLabel(profileName: profile.name, personName: profile.personName)
+        return profiles.filter {
+            profileLabel(profileName: $0.name, personName: $0.personName).caseInsensitiveCompare(label)
+                == .orderedSame
+        }.sorted {
+            let order = $0.name.localizedCompare($1.name)
+            return order == .orderedSame ? $0.directory < $1.directory : order == .orderedAscending
+        }
+    }
 }

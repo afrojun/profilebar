@@ -5,6 +5,7 @@ struct ProfileBridge {
     let focusedProfile: ([ChromeProfile]) -> ChromeProfile?
     let openURLs: (ChromeProfile, [URL]) throws -> Void
     let openGroup: (ChromeProfile, [URL], TabGroupDetails, String) throws -> Bool
+    let openProfileSettings: (ChromeProfile, String) throws -> Bool
 
     func handle(_ request: [String: Any], callerExtensionID: String? = nil) -> [String: Any] {
         do {
@@ -20,6 +21,15 @@ struct ProfileBridge {
                     response["focusedProfileDirectory"] = current.directory
                 }
                 return response
+            case "openProfileSettings":
+                guard
+                    let directory = request["profileDirectory"] as? String,
+                    let callerExtensionID = Self.validExtensionID(callerExtensionID)
+                else { return failure("invalid_request") }
+                guard let profile = try loadProfiles().first(where: { $0.directory == directory }) else {
+                    return failure("profile_not_found")
+                }
+                return ["ok": true, "opened": try openProfileSettings(profile, callerExtensionID)]
             case "openURL", "openURLs", "openGroup":
                 let rawURLs: [String]?
                 if command == "openURL" {
@@ -52,9 +62,7 @@ struct ProfileBridge {
                 if command == "openGroup" {
                     guard
                         let group = TabGroupDetails.parse(request["group"]),
-                        let callerExtensionID,
-                        callerExtensionID.count == 32,
-                        callerExtensionID.allSatisfy({ ("a"..."p").contains(String($0)) })
+                        let callerExtensionID = Self.validExtensionID(callerExtensionID)
                     else { return failure("invalid_request") }
                     let grouped = try openGroup(profile, urls, group, callerExtensionID)
                     return ["ok": true, "grouped": grouped]
@@ -71,6 +79,15 @@ struct ProfileBridge {
 
     private func failure(_ code: String) -> [String: Any] {
         ["ok": false, "error": code]
+    }
+
+    private static func validExtensionID(_ extensionID: String?) -> String? {
+        guard
+            let extensionID,
+            extensionID.count == 32,
+            extensionID.allSatisfy({ ("a"..."p").contains(String($0)) })
+        else { return nil }
+        return extensionID
     }
 }
 
@@ -93,6 +110,17 @@ struct TabGroupDetails {
 
     var dictionary: [String: Any] {
         ["title": title, "color": color, "collapsed": collapsed]
+    }
+}
+
+enum ChromeProfileSettingsLauncher {
+    /// Chrome opens its settings pages for extensions but not from the command line, so this opens
+    /// the extension's relay page in the profile, which shows that profile's settings.
+    static func open(_ profile: ChromeProfile, extensionID: String) throws -> Bool {
+        guard ProfileExtensionAvailability.isEnabled(in: profile, extensionID: extensionID) else { return false }
+        try ChromeURLLauncher.open(
+            profile, urls: [URL(string: "chrome-extension://\(extensionID)/manage-profile.html")!])
+        return true
     }
 }
 

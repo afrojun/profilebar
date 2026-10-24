@@ -258,7 +258,7 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
 
     private func activate(_ profile: ChromeProfile) {
         do {
-            try ChromeProfileActivator.activate(profile)
+            try ChromeProfileActivator.activate(profile, among: profiles)
         } catch ProfileBarError.accessibilityAccessRequired {
             showAccessibilityHelp()
         } catch {

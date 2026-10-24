@@ -8,7 +8,7 @@ enum GroupHandoff {
         group: TabGroupDetails,
         extensionID: String
     ) throws -> Bool {
-        guard GroupReceiverAvailability.canReceive(in: profile, extensionID: extensionID) else {
+        guard ProfileExtensionAvailability.isEnabled(in: profile, extensionID: extensionID) else {
             try ChromeURLLauncher.open(profile, urls: urls)
             return false
         }
@@ -48,17 +48,17 @@ enum GroupHandoff {
     }
 }
 
-enum GroupReceiverAvailability {
-    static func canReceive(in profile: ChromeProfile, extensionID: String) -> Bool {
+enum ProfileExtensionAvailability {
+    static func isEnabled(in profile: ChromeProfile, extensionID: String) -> Bool {
         let preferences = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Google/Chrome")
             .appendingPathComponent(profile.directory)
             .appendingPathComponent("Secure Preferences")
         guard let data = try? Data(contentsOf: preferences) else { return false }
-        return supportsReceiver(data, extensionID: extensionID)
+        return isEnabled(preferences: data, extensionID: extensionID)
     }
 
-    static func supportsReceiver(_ data: Data, extensionID: String) -> Bool {
+    static func isEnabled(preferences data: Data, extensionID: String) -> Bool {
         guard
             let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let extensions = root["extensions"] as? [String: Any],

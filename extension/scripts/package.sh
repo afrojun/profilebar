@@ -16,6 +16,8 @@ zip -q -FS "$archive" \
   icons/icon-32.png \
   icons/icon-48.png \
   icons/icon-128.png \
+  manage-profile.html \
+  manage-profile.js \
   manifest.json \
   move-status.html \
   move-status.js \

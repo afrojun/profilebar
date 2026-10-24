@@ -21,6 +21,7 @@ URL copying belongs to the separate Instant Copy URL extension. Do not add it he
 - `group-receiver.*`: claims a group handoff in the destination profile and recreates it.
 - `setup.*`: first-run and options page with a live ProfileBar connection check.
 - `move-status.*`: explains a failed or partial move.
+- `manage-profile.*`: ProfileBar opens it in a chosen profile so it can show that profile's `chrome://settings/manageProfile`, which Chrome will not open from the command line. The setup page's rename buttons use it when profiles share a name.
 - Store-installed builds talk to `dev.afrojun.profilebar`. Unpacked builds have no `update_url` and talk to `dev.afrojun.profilebar.dev`, which ProfileBar Dev registers.
 
 The native messaging protocol has both ends in this repository. Change them together, and keep older helpers safe: a helper that rejects a new request type must leave the source tabs open.
