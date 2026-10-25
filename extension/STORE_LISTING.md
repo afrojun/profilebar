@@ -54,11 +54,15 @@ through the local ProfileBar app.
   and tab right-click menus.
 - `nativeMessaging`: Exchange the profile list and the selected URLs with the
   ProfileBar app on the same Mac, which opens the URLs in the chosen profile.
+  When profiles share a name, the setup page also asks ProfileBar to open the
+  chosen profile's settings so the user can rename it.
 - `tabs`: Read the URLs of the clicked, selected, or grouped tabs when the user
   chooses a move action, then close those tabs after a successful move. The
   extension does not scan tabs in the background.
 - `tabGroups`: Read the chosen group's title, colour, and collapsed state, then
-  recreate them in the destination profile.
+  recreate them in the destination profile. Check whether the focused window
+  has a tab group, without reading URLs, to show the group actions only when
+  they apply.
 
 **Remote code:** No. All executable code is included in the extension package.
 

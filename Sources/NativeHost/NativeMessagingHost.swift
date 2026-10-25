@@ -24,7 +24,8 @@ struct NativeMessagingHost {
                     loadProfiles: ChromeProfileStore.load,
                     focusedProfile: ChromeFocusedProfile.detect,
                     openURLs: ChromeURLLauncher.open,
-                    openGroup: GroupHandoff.open
+                    openGroup: GroupHandoff.open,
+                    openProfileSettings: ChromeProfileSettingsLauncher.open
                 )
                 response = bridge.handle(request, callerExtensionID: extensionID)
             }

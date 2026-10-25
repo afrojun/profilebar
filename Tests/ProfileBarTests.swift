@@ -43,30 +43,60 @@ struct ProfileBarTests {
             ),
             "page content without Chrome's title separator must not match"
         )
+        let menuTitles = ["Work", "Taylor (Work)", "Taylor (Work)", "Personal", "Taylor", "", "Add Profile…"]
         expect(
-            ChromeWindowTitleMatcher.matchesProfileMenuItem(
-                title: "Taylor (Work)",
-                profileName: "Work",
-                personName: "Taylor"
-            ),
-            "a qualified profile menu item should match"
+            ChromeWindowTitleMatcher.profileMenuItemIndices(
+                titles: menuTitles, profileName: "Work", personName: "Taylor")
+                == [1, 2],
+            "qualified menu entries should be counted without a bare entry for another profile")
+        expect(
+            ChromeWindowTitleMatcher.profileMenuItemIndices(titles: menuTitles, profileName: "Work", personName: nil)
+                == [0],
+            "a plain menu entry should match a profile without a person name")
+        expect(
+            ChromeWindowTitleMatcher.profileMenuItemIndices(
+                titles: ["Personal", "Work"], profileName: "Work", personName: "Taylor") == [1],
+            "a bare profile name should match when no entry shows the qualified label")
+        expect(
+            ChromeWindowTitleMatcher.profileMenuItemIndices(
+                titles: menuTitles, profileName: "Personal", personName: "Personal") == [3],
+            "a person name equal to the profile name should match the plain entry")
+        expect(
+            ChromeWindowTitleMatcher.profileMenuItemIndices(
+                titles: ["Taylor"], profileName: "Work", personName: "Taylor"
+            )
+            .isEmpty,
+            "a shared person name must not identify a profile")
+        let namesakeProfiles = [
+            try! ChromeProfile(directory: "Profile 5", name: "Taylor", personName: "Taylor"),
+            try! ChromeProfile(directory: "Default", name: "Work", personName: "Taylor"),
+            try! ChromeProfile(directory: "Profile 3", name: "Taylor", personName: nil),
+        ]
+        expect(
+            ChromeWindowTitleMatcher.profilesSharingLabel(with: namesakeProfiles[0], in: namesakeProfiles)
+                .map(\.directory) == ["Profile 3", "Profile 5"],
+            "same-named profiles should follow Chrome's Profiles menu order"
         )
         expect(
-            ChromeWindowTitleMatcher.matchesProfileMenuItem(
-                title: "Personal",
-                profileName: "Personal",
-                personName: "Personal"
-            ),
-            "a plain profile menu item should match"
+            ChromeWindowTitleMatcher.profilesSharingLabel(with: namesakeProfiles[1], in: namesakeProfiles)
+                == [namesakeProfiles[1]],
+            "a uniquely named profile should share its label with no other profile"
         )
+        let renamedProfile = try! ChromeProfile(directory: "Profile 5", name: "Work", personName: nil)
         expect(
-            !ChromeWindowTitleMatcher.matchesProfileMenuItem(
-                title: "Taylor",
-                profileName: "Work",
-                personName: "Taylor"
-            ),
-            "a shared person name must not identify a profile"
-        )
+            [namesakeProfiles[2], renamedProfile].current(namesakeProfiles[0]) == renamedProfile,
+            "a profile held from before a rename should resolve to Chrome's current details")
+        expect(
+            [renamedProfile].current(namesakeProfiles[2]) == namesakeProfiles[2],
+            "a profile Chrome no longer lists should be used as given")
+        let labelCollision = [
+            try! ChromeProfile(directory: "Profile 2", name: "Alex (Work)", personName: nil),
+            try! ChromeProfile(directory: "Default", name: "Work", personName: "Alex"),
+        ]
+        expect(
+            ChromeWindowTitleMatcher.profilesSharingLabel(with: labelCollision[0], in: labelCollision)
+                .map(\.directory) == ["Default", "Profile 2"],
+            "profiles sharing a displayed label should be ordered by directory, as Chrome does")
         expect(
             ChromeWindowTitleMatcher.matches(
                 windowTitle: "  CALENDAR - GOOGLE CHROME — TAYLOR (WORK)  ",
@@ -92,13 +122,14 @@ struct ProfileBarTests {
                     "Profile 2": ["name": "Work", "gaia_given_name": "Taylor"],
                     "Default": ["name": "", "shortcut_name": "Personal", "gaia_given_name": ""],
                     "Profile 1": [:],
+                    "Profile 9": ["name": "Hidden", "is_omitted": true],
                 ]
             ]
         ])
         let profiles = try! ChromeProfileStore.parse(localState)
         expect(
             profiles.map(\.name) == ["Personal", "Profile 1", "Work"],
-            "profiles should use name fallbacks and sort by display name"
+            "profiles should use name fallbacks, skip profiles Chrome omits, and sort by display name"
         )
         expect(profiles[0].personName == nil, "an empty person name should be omitted")
         expect(profiles[2].personName == "Taylor", "a person name should be loaded")
@@ -132,6 +163,7 @@ struct ProfileBarTests {
         var openedURLs: [URL]?
         var openedGroup: TabGroupDetails?
         var groupedResult = true
+        var settingsProfile: ChromeProfile?
         let bridge = ProfileBridge(
             loadProfiles: { [workProfile] },
             focusedProfile: { _ in workProfile },
@@ -139,6 +171,10 @@ struct ProfileBarTests {
             openGroup: { _, _, group, _ in
                 openedGroup = group
                 return groupedResult
+            },
+            openProfileSettings: { profile, _ in
+                settingsProfile = profile
+                return true
             }
         )
         let listed = bridge.handle(["type": "listProfiles"])
@@ -201,6 +237,15 @@ struct ProfileBarTests {
         expect(
             ungrouped["ok"] as? Bool == true && ungrouped["grouped"] as? Bool == false,
             "the native helper should report a URL-only fallback")
+        let settingsRequest: [String: Any] = ["type": "openProfileSettings", "profileDirectory": "Profile 2"]
+        expect(
+            bridge.handle(settingsRequest)["error"] as? String == "invalid_request",
+            "a caller without an extension origin cannot open profile settings")
+        expect(settingsProfile == nil, "an untrusted settings request must not launch Chrome")
+        let settings = bridge.handle(settingsRequest, callerExtensionID: NativeHostRegistration.storeExtensionID)
+        expect(
+            settings["ok"] as? Bool == true && settings["opened"] as? Bool == true && settingsProfile == workProfile,
+            "profile settings should open in the requested profile")
         var invalidGroup = groupRequest
         invalidGroup["group"] = ["title": "Research", "color": "not-a-color", "collapsed": true]
         expect(
@@ -222,17 +267,17 @@ struct ProfileBarTests {
             ])
         }
         expect(
-            GroupReceiverAvailability.supportsReceiver(
-                receiverPreferences(nativeAccess: true),
+            ProfileExtensionAvailability.isEnabled(
+                preferences: receiverPreferences(nativeAccess: true),
                 extensionID: NativeHostRegistration.storeExtensionID), "a capable destination should receive groups")
         expect(
-            !GroupReceiverAvailability.supportsReceiver(
-                receiverPreferences(nativeAccess: true, disabled: true),
+            !ProfileExtensionAvailability.isEnabled(
+                preferences: receiverPreferences(nativeAccess: true, disabled: true),
                 extensionID: NativeHostRegistration.storeExtensionID),
             "a disabled extension should use the URL-only fallback")
         expect(
-            !GroupReceiverAvailability.supportsReceiver(
-                receiverPreferences(nativeAccess: false),
+            !ProfileExtensionAvailability.isEnabled(
+                preferences: receiverPreferences(nativeAccess: false),
                 extensionID: NativeHostRegistration.storeExtensionID),
             "a profile without native access should use the URL-only fallback")
 

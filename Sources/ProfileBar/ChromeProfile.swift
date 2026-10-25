@@ -24,6 +24,13 @@ struct ChromeProfile: Equatable {
     }
 }
 
+extension [ChromeProfile] {
+    /// Returns Chrome's current details for `profile`, which a caller may hold from before a rename.
+    func current(_ profile: ChromeProfile) -> ChromeProfile {
+        first { $0.directory == profile.directory } ?? profile
+    }
+}
+
 enum ProfileBarError: LocalizedError {
     case accessibilityAccessRequired
     case message(String)
@@ -55,7 +62,8 @@ enum ChromeProfileStore {
             throw ProfileBarError.message("Chrome's profile list could not be read.")
         }
 
-        return try cache.map { directory, details in
+        // Chrome leaves omitted profiles out of its Profiles menu and profile picker.
+        return try cache.filter { $0.value["is_omitted"] as? Bool != true }.map { directory, details in
             let name =
                 nonEmpty(details["name"] as? String)
                 ?? nonEmpty(details["shortcut_name"] as? String)

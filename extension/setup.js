@@ -4,6 +4,20 @@ const intro = document.querySelector("#intro");
 const steps = document.querySelector("#steps");
 const checkButton = document.querySelector("#check");
 const getProfileBar = document.querySelector("#get-profilebar");
+const sharedNamesWarning = document.querySelector("#shared-names");
+const sharedNamesMessage = document.querySelector("#shared-names-message");
+const sharedNamesActions = document.querySelector("#shared-names-actions");
+const sharedNamesResult = document.querySelector("#shared-names-result");
+
+const renameResults = {
+  opened: (folder) => `Chrome opened the settings for ${folder}. Change its name there.`,
+  "extension-missing": (folder) => `ProfileBar for Chrome is not installed in ${folder}. `
+    + "Open chrome://settings/manageProfile in that profile to rename it.",
+  "update-required": () => "Update ProfileBar to rename profiles from here, "
+    + "or open chrome://settings/manageProfile in the profile you want to rename.",
+  failed: () => "Chrome could not open the settings. "
+    + "Open chrome://settings/manageProfile in the profile you want to rename.",
+};
 
 const views = {
   preview: {
@@ -57,11 +71,11 @@ async function checkProfileBar() {
   } catch (error) {
     console.error("Could not check ProfileBar:", error);
   }
-  show(result?.state in views ? result.state : "error", result?.destinationCount);
+  show(result?.state in views ? result.state : "error", result?.destinationCount, result?.sharedNameProfiles);
   checkButton.disabled = false;
 }
 
-function show(state, destinationCount) {
+function show(state, destinationCount, sharedNameProfiles = []) {
   const view = views[state];
   status.dataset.state = state;
   status.textContent = state === "ready" ? connectedStatus(destinationCount) : view.status;
@@ -70,6 +84,35 @@ function show(state, destinationCount) {
   steps.hidden = !view.steps;
   checkButton.hidden = state === "unsupported" || state === "ready";
   getProfileBar.hidden = !view.steps;
+  showSharedNames(state === "ready" ? sharedNameProfiles : []);
+}
+
+function showSharedNames(profiles) {
+  sharedNamesWarning.hidden = profiles.length === 0;
+  const quoted = new Intl.ListFormat("en", { type: "conjunction" })
+    .format([...new Set(profiles.map(({ name }) => `“${name}”`))]);
+  sharedNamesMessage.textContent = `More than one Chrome profile is named ${quoted}, so the move menus `
+    + "label them by folder and may also list the profile you are in. Rename one so you can tell them apart.";
+  sharedNamesActions.replaceChildren(...profiles.map(renameButton));
+  sharedNamesResult.textContent = "";
+}
+
+function renameButton({ directory, name }) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = `Rename ${name} (${directory})`;
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    let response;
+    try {
+      response = await chrome.runtime.sendMessage({ type: "open-profile-settings", profileDirectory: directory });
+    } catch (error) {
+      console.error("Could not open the profile settings:", error);
+    }
+    sharedNamesResult.textContent = (renameResults[response?.result] ?? renameResults.failed)(directory);
+    button.disabled = false;
+  });
+  return button;
 }
 
 function connectedStatus(count) {

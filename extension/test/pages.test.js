@@ -109,22 +109,33 @@ test("a failed destination group removes created tabs and reports failure", asyn
   assert.deepEqual(calls.at(-1), ["remove", 7]);
 });
 
+function fakeElement() {
+  const element = {
+    dataset: {},
+    hidden: false,
+    disabled: false,
+    textContent: "",
+    children: [],
+    addEventListener(type, listener) { element.listener = listener; },
+    replaceChildren(...children) { element.children = children; },
+  };
+  return element;
+}
+
 function setupHarness(chrome) {
   const elements = {};
-  for (const selector of ["#status", "#heading", "#intro", "#steps", "#check", "#get-profilebar"]) {
-    elements[selector] = {
-      dataset: {},
-      hidden: false,
-      disabled: false,
-      textContent: "",
-      addEventListener(type, listener) { elements[selector].listener = listener; },
-    };
+  for (const selector of [
+    "#status", "#heading", "#intro", "#steps", "#check", "#get-profilebar",
+    "#shared-names", "#shared-names-message", "#shared-names-actions", "#shared-names-result",
+  ]) {
+    elements[selector] = fakeElement();
   }
   const listeners = {};
   runScript("setup.js", {
     chrome,
     console: { error() {} },
-    document: { querySelector: (selector) => elements[selector] },
+    document: { querySelector: (selector) => elements[selector], createElement: fakeElement },
+    Intl,
     window: { addEventListener(type, listener) { listeners[type] = listener; } },
   });
   return { elements, listeners };
@@ -145,6 +156,36 @@ test("the setup page shows connected profiles without setup steps", async () => 
   assert.equal(elements["#steps"].hidden, true);
   assert.equal(elements["#check"].hidden, true);
   assert.equal(elements["#get-profilebar"].hidden, true);
+  assert.equal(elements["#shared-names"].hidden, true);
+});
+
+test("the setup page offers to rename each profile that shares a name", async () => {
+  const messages = [];
+  const { elements } = setupHarness({
+    runtime: { async sendMessage(message) {
+      messages.push(message);
+      if (message.type === "open-profile-settings") return { result: "extension-missing" };
+      return { state: "ready", destinationCount: 4, sharedNameProfiles: [
+        { directory: "Profile 3", name: "Taylor" },
+        { directory: "Profile 5", name: "Taylor" },
+        { directory: "Profile 6", name: "Work" },
+        { directory: "Profile 7", name: "Work" },
+      ] };
+    } },
+  });
+  await new Promise(setImmediate);
+
+  assert.equal(elements["#shared-names"].hidden, false);
+  assert.match(elements["#shared-names-message"].textContent, /named “Taylor” and “Work”, so/);
+  const buttons = elements["#shared-names-actions"].children;
+  assert.deepEqual(buttons.map((button) => button.textContent), [
+    "Rename Taylor (Profile 3)", "Rename Taylor (Profile 5)", "Rename Work (Profile 6)", "Rename Work (Profile 7)",
+  ]);
+
+  await buttons[1].listener();
+  assert.deepEqual(JSON.parse(JSON.stringify(messages.at(-1))), { type: "open-profile-settings", profileDirectory: "Profile 5" });
+  assert.match(elements["#shared-names-result"].textContent, /not installed in Profile 5/);
+  assert.equal(buttons[1].disabled, false);
 });
 
 test("the setup page guides installation and checks again on request", async () => {

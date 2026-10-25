@@ -258,7 +258,9 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
 
     private func activate(_ profile: ChromeProfile) {
         do {
-            try ChromeProfileActivator.activate(profile)
+            // Read Chrome's profiles again: a rename since the last refresh changes which profiles share a name.
+            let currentProfiles = (try? ChromeProfileStore.load()) ?? profiles
+            try ChromeProfileActivator.activate(profile, among: currentProfiles)
         } catch ProfileBarError.accessibilityAccessRequired {
             showAccessibilityHelp()
         } catch {

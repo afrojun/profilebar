@@ -74,6 +74,8 @@ final class SettingsWindowController: NSWindowController {
         NSApp.activate()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
+        // macOS may decline the activation request while another app is active.
+        window?.orderFrontRegardless()
     }
 
     func refresh() {

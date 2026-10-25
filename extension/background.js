@@ -9,6 +9,9 @@ const MENU_REFRESH = "refresh-profiles";
 const PROFILE_PREFIX = "profile:";
 
 let menuRefresh = Promise.resolve();
+// Chrome does not say which tab was right-clicked before it shows the menu, so the group actions
+// appear while the focused window has a group. Null until this service worker builds the menu.
+let groupMenuIds = null;
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") {
@@ -22,10 +25,23 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.windows.onFocusChanged.addListener(() => {
   void refreshProfileMenu();
 });
+for (const event of [
+  chrome.tabGroups.onCreated, chrome.tabGroups.onRemoved, chrome.tabs.onAttached, chrome.tabs.onDetached,
+]) {
+  event.addListener(() => {
+    void updateGroupMenu();
+  });
+}
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== "check-profilebar") return false;
-  void refreshProfileMenu().then(sendResponse);
-  return true;
+  if (message?.type === "check-profilebar") {
+    void refreshProfileMenu().then(sendResponse);
+    return true;
+  }
+  if (message?.type === "open-profile-settings" && typeof message.profileDirectory === "string") {
+    void openProfileSettings(message.profileDirectory).then(sendResponse);
+    return true;
+  }
+  return false;
 });
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   const itemId = String(info.menuItemId);
@@ -45,14 +61,32 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 function refreshProfileMenu() {
-  menuRefresh = menuRefresh.catch(() => {}).then(buildProfileMenu).catch((error) => {
+  return queueMenuUpdate(buildProfileMenu);
+}
+
+function updateGroupMenu() {
+  return queueMenuUpdate(async () => {
+    if (groupMenuIds === null) return buildProfileMenu();
+    const visible = await focusedWindowHasGroup();
+    await Promise.all(groupMenuIds.map((id) => updateMenu(id, { visible })));
+  });
+}
+
+function queueMenuUpdate(update) {
+  menuRefresh = menuRefresh.catch(() => {}).then(update).catch((error) => {
     console.error("Could not update the profile menu:", error);
   });
   return menuRefresh;
 }
 
+async function focusedWindowHasGroup() {
+  const groups = await chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+  return groups.length > 0;
+}
+
 async function buildProfileMenu() {
   let profiles;
+  let sharedNameProfiles = [];
   const platform = await chrome.runtime.getPlatformInfo();
   // ProfileBar's native helper is macOS-only. Drop this check when it runs elsewhere.
   let state = platform.os === "mac" ? "setup" : "unsupported";
@@ -63,6 +97,10 @@ async function buildProfileMenu() {
         (profile) => profile && typeof profile.directory === "string" && typeof profile.name === "string",
       )) throw new Error("Invalid profile list");
       profiles = response.profiles;
+      const sharedNames = sharedProfileNames(profiles);
+      sharedNameProfiles = profiles
+        .filter(({ name }) => sharedNames.has(nameKey(name)))
+        .map(({ directory, name }) => ({ directory, name }));
       if (profiles.some(({ directory }) => directory === response.focusedProfileDirectory)) {
         const window = await chrome.windows.getLastFocused().catch(() => null);
         if (window?.focused) {
@@ -76,11 +114,12 @@ async function buildProfileMenu() {
   }
 
   await removeMenus();
+  groupMenuIds = [];
   await buildPageMenu(state, profiles);
   if (chrome.contextMenus.ContextType?.TAB) {
     await buildTabMenu(state, profiles);
   }
-  return { state, destinationCount: profiles?.length ?? 0 };
+  return { state, destinationCount: profiles?.length ?? 0, sharedNameProfiles };
 }
 
 async function buildPageMenu(state, profiles) {
@@ -124,14 +163,15 @@ async function buildTabMenu(state, profiles) {
         contexts,
       });
     }
-    await createTabDivider("tab:group-divider");
-    for (const profile of destinations) {
-      await createMenu({
-        id: `group:${PROFILE_PREFIX}${encodeURIComponent(profile.directory)}`,
-        parentId,
-        title: `Move group to ${profile.title}`,
-        contexts,
-      });
+    const groupItems = destinations.map((profile) => ({
+      id: `group:${PROFILE_PREFIX}${encodeURIComponent(profile.directory)}`,
+      title: `Move group to ${profile.title}`,
+    }));
+    groupMenuIds = ["tab:group-divider", ...groupItems.map(({ id }) => id)];
+    const visible = await focusedWindowHasGroup();
+    await createTabDivider("tab:group-divider", { visible });
+    for (const item of groupItems) {
+      await createMenu({ ...item, parentId, contexts, visible });
     }
   } else {
     let option;
@@ -151,23 +191,47 @@ async function buildTabMenu(state, profiles) {
   }
 }
 
-function createTabDivider(id) {
+function createTabDivider(id, properties = {}) {
   // Chrome hides native separators in tab submenus; this short rule matches the page menu.
-  return createMenu({ id, parentId: TAB_MENU_ROOT, title: "───────", enabled: false, contexts: ["tab"] });
+  return createMenu({ id, parentId: TAB_MENU_ROOT, title: "───────", enabled: false, contexts: ["tab"], ...properties });
 }
 
 function namedProfiles(profiles) {
-  const nameCounts = new Map();
-  for (const profile of profiles) nameCounts.set(profile.name, (nameCounts.get(profile.name) ?? 0) + 1);
+  const sharedNames = sharedProfileNames(profiles);
   return profiles.map((profile) => ({
     directory: profile.directory,
-    title: nameCounts.get(profile.name) > 1 ? `${profile.name} (${profile.directory})` : profile.name,
+    title: sharedNames.has(nameKey(profile.name)) ? `${profile.name} (${profile.directory})` : profile.name,
   }));
+}
+
+// Returns the name keys used by more than one profile. ProfileBar matches Chrome's window titles
+// without regard to case, so names differing only in case are shared too.
+function sharedProfileNames(profiles) {
+  const seen = new Set();
+  const shared = new Set();
+  for (const { name } of profiles) {
+    if (seen.has(nameKey(name))) shared.add(nameKey(name));
+    seen.add(nameKey(name));
+  }
+  return shared;
+}
+
+function nameKey(name) {
+  return name.toLocaleLowerCase();
 }
 
 function removeMenus() {
   return new Promise((resolve, reject) => {
     chrome.contextMenus.removeAll(() => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve();
+    });
+  });
+}
+
+function updateMenu(id, properties) {
+  return new Promise((resolve, reject) => {
+    chrome.contextMenus.update(id, properties, () => {
       if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
       else resolve();
     });
@@ -181,6 +245,20 @@ function createMenu(properties) {
       else resolve();
     });
   });
+}
+
+// ProfileBar opens the profile's settings through this extension's copy in that profile.
+async function openProfileSettings(profileDirectory) {
+  try {
+    const response = await chrome.runtime.sendNativeMessage(NATIVE_HOST, {
+      type: "openProfileSettings", profileDirectory,
+    });
+    if (response?.ok) return { result: response.opened ? "opened" : "extension-missing" };
+    return { result: response?.error === "invalid_request" ? "update-required" : "failed" };
+  } catch (error) {
+    console.debug("ProfileBar could not open the profile settings:", error);
+    return { result: "failed" };
+  }
 }
 
 async function moveToProfile(menuId, info, tab, mode) {
