@@ -2,7 +2,8 @@ import AppKit
 import ApplicationServices
 
 enum ChromeProfileActivator {
-    static func activate(_ profile: ChromeProfile, among profiles: [ChromeProfile]) throws {
+    static func activate(_ requestedProfile: ChromeProfile, among profiles: [ChromeProfile]) throws {
+        let profile = profiles.current(requestedProfile)
         let chromeApplications = NSRunningApplication.runningApplications(withBundleIdentifier: "com.google.Chrome")
         guard !chromeApplications.isEmpty else {
             try launch(profile)
@@ -54,15 +55,14 @@ enum ChromeProfileActivator {
             let menu = elements(of: profilesMenu).first
         else { return false }
 
-        let profileItems = elements(of: menu).filter {
-            ChromeWindowTitleMatcher.matchesProfileMenuItem(
-                title: stringAttribute($0, kAXTitleAttribute),
-                profileName: profile.name,
-                personName: profile.personName
-            )
-        }
-        guard profileItems.indices.contains(occurrence) else { return false }
-        return AXUIElementPerformAction(profileItems[occurrence], kAXPressAction as CFString) == .success
+        let items = elements(of: menu)
+        let profileItemIndices = ChromeWindowTitleMatcher.profileMenuItemIndices(
+            titles: items.map { stringAttribute($0, kAXTitleAttribute) },
+            profileName: profile.name,
+            personName: profile.personName
+        )
+        guard profileItemIndices.indices.contains(occurrence) else { return false }
+        return AXUIElementPerformAction(items[profileItemIndices[occurrence]], kAXPressAction as CFString) == .success
     }
 
     private static func launch(_ profile: ChromeProfile) throws {

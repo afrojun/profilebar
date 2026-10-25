@@ -9,6 +9,7 @@ ProfileBar is a native macOS menu-bar app. One action must switch to an open Chr
 - Profile-avatar clicks and global shortcuts must call the same switch-or-open path.
 - Profile-avatar clicks and shortcuts must never copy, reopen, or forward the current page URL. The separate browser extension action may open a user-selected URL in a user-selected profile.
 - Search Accessibility windows across every running Chrome instance first, including other desktop Spaces. If no window matches, try Chrome's profile command without showing its Profiles menu, then launch the profile as a last resort.
+- Profiles that share a Chrome label have identical window titles, so skip the window search for them and press their entry in the Profiles menu by position. Chrome sorts that menu by label, then profile directory, and `ChromeWindowTitleMatcher` mirrors that order.
 - Match profile menu labels exactly by profile name or by Chrome's qualified `Person (Profile)` form. A person name alone is ambiguous.
 - Store profile preferences by Chrome's stable profile directory, not by display name or list position.
 - Each profile avatar is optional. Keep the settings item so Settings and Quit are always available.

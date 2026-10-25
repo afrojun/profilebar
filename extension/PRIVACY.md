@@ -1,11 +1,13 @@
 # ProfileBar for Chrome Privacy Policy
 
-Effective date: 15 October 2026
+Effective date: 25 October 2026
 
 ProfileBar for Chrome reads tab URLs only when you choose a move action from
 its right-click menu. It reads the clicked tab, the highlighted tabs, or the
 tabs in the chosen group. For a group move, it also reads the group's title,
-colour, and collapsed state. It does not scan tabs in the background.
+colour, and collapsed state. To show the group actions only when they apply, it
+checks whether the focused window has any tab group, which reads no URLs. It
+does not scan tabs in the background.
 
 The extension talks to the ProfileBar app on the same Mac through Chrome's
 local native messaging channel. ProfileBar sends it the list of Chrome profiles
@@ -16,6 +18,12 @@ directory to ProfileBar, which asks Chrome to open them in that profile. The
 extension then closes the original tabs. For group moves, a temporary local
 relay lets the extension in the destination profile recreate the group. If it
 is not installed there, ProfileBar opens the URLs without a group.
+
+When more than one profile has the same name, the setup page offers to rename
+them. Choosing **Rename** sends that profile's directory name to ProfileBar,
+which checks Chrome's local preferences to confirm this extension is enabled
+there, then opens the extension in that profile so it can show Chrome's
+profile settings.
 
 Neither component stores the URLs. The extension makes no network requests and
 has no analytics, advertising, tracking, accounts, or remote code. Chrome loads
@@ -31,7 +39,7 @@ Store User Data Policy, including the Limited Use requirements.
 - `tabs` reads the URLs of the tabs you choose to move and closes them after a
   successful move.
 - `tabGroups` reads a chosen group's visible details and recreates them in the
-  destination profile.
+  destination profile, and checks whether the focused window has a group.
 
 ## Changes
 

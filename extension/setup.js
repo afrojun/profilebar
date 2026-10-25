@@ -89,9 +89,10 @@ function show(state, destinationCount, sharedNameProfiles = []) {
 
 function showSharedNames(profiles) {
   sharedNamesWarning.hidden = profiles.length === 0;
-  const quoted = [...new Set(profiles.map(({ name }) => `“${name}”`))].join(" and ");
+  const quoted = new Intl.ListFormat("en", { type: "conjunction" })
+    .format([...new Set(profiles.map(({ name }) => `“${name}”`))]);
   sharedNamesMessage.textContent = `More than one Chrome profile is named ${quoted}, so the move menus `
-    + "label them by folder and also list the profile you are in. Rename one so you can tell them apart.";
+    + "label them by folder and may also list the profile you are in. Rename one so you can tell them apart.";
   sharedNamesActions.replaceChildren(...profiles.map(renameButton));
   sharedNamesResult.textContent = "";
 }

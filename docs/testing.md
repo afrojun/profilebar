@@ -26,9 +26,9 @@ Record the starting Chrome window count and any ProfileBar settings you plan to 
 1. Select a profile with a window in the current Space. Its existing window should come forward without increasing Chrome's window count.
 2. Select a profile with a window in another Space. It should come forward without creating a window.
 3. Select a profile with no open window. Exactly one window should open in that profile, without copying the current page URL.
+4. If multiple Chrome processes already exist, or a safe isolated fixture is available, repeat with a second or headless instance. A window in any instance must be found before ProfileBar tries a menu command or opens a new one.
 
 If two profiles share a name, repeat these checks for each of them. Chrome titles their windows identically, so ProfileBar picks them by their order in Chrome's **Profiles** menu, and each must bring forward its own window.
-4. If multiple Chrome processes already exist, or a safe isolated fixture is available, repeat with a second or headless instance. A window in any instance must be found before ProfileBar tries a menu command or opens a new one.
 
 For settings or shortcut changes, also check that repeated **Settings…** actions reuse one window, a hidden menu-bar avatar does not disable its shortcut, and shortcut conflicts leave the previous assignment intact. Restore only settings changed for the test. Close only windows the test created, and do not remove Chrome profile data.
 

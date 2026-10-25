@@ -80,8 +80,8 @@ function queueMenuUpdate(update) {
 }
 
 async function focusedWindowHasGroup() {
-  const tabs = await chrome.tabs.query({ lastFocusedWindow: true });
-  return tabs.some(({ groupId }) => Number.isInteger(groupId) && groupId !== -1);
+  const groups = await chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+  return groups.length > 0;
 }
 
 async function buildProfileMenu() {
@@ -99,7 +99,7 @@ async function buildProfileMenu() {
       profiles = response.profiles;
       const sharedNames = sharedProfileNames(profiles);
       sharedNameProfiles = profiles
-        .filter(({ name }) => sharedNames.has(name))
+        .filter(({ name }) => sharedNames.has(nameKey(name)))
         .map(({ directory, name }) => ({ directory, name }));
       if (profiles.some(({ directory }) => directory === response.focusedProfileDirectory)) {
         const window = await chrome.windows.getLastFocused().catch(() => null);
@@ -200,18 +200,24 @@ function namedProfiles(profiles) {
   const sharedNames = sharedProfileNames(profiles);
   return profiles.map((profile) => ({
     directory: profile.directory,
-    title: sharedNames.has(profile.name) ? `${profile.name} (${profile.directory})` : profile.name,
+    title: sharedNames.has(nameKey(profile.name)) ? `${profile.name} (${profile.directory})` : profile.name,
   }));
 }
 
+// Returns the name keys used by more than one profile. ProfileBar matches Chrome's window titles
+// without regard to case, so names differing only in case are shared too.
 function sharedProfileNames(profiles) {
   const seen = new Set();
   const shared = new Set();
   for (const { name } of profiles) {
-    if (seen.has(name)) shared.add(name);
-    seen.add(name);
+    if (seen.has(nameKey(name))) shared.add(nameKey(name));
+    seen.add(nameKey(name));
   }
   return shared;
+}
+
+function nameKey(name) {
+  return name.toLocaleLowerCase();
 }
 
 function removeMenus() {

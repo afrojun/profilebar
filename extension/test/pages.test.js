@@ -135,6 +135,7 @@ function setupHarness(chrome) {
     chrome,
     console: { error() {} },
     document: { querySelector: (selector) => elements[selector], createElement: fakeElement },
+    Intl,
     window: { addEventListener(type, listener) { listeners[type] = listener; } },
   });
   return { elements, listeners };
@@ -164,18 +165,22 @@ test("the setup page offers to rename each profile that shares a name", async ()
     runtime: { async sendMessage(message) {
       messages.push(message);
       if (message.type === "open-profile-settings") return { result: "extension-missing" };
-      return { state: "ready", destinationCount: 2, sharedNameProfiles: [
+      return { state: "ready", destinationCount: 4, sharedNameProfiles: [
         { directory: "Profile 3", name: "Taylor" },
         { directory: "Profile 5", name: "Taylor" },
+        { directory: "Profile 6", name: "Work" },
+        { directory: "Profile 7", name: "Work" },
       ] };
     } },
   });
   await new Promise(setImmediate);
 
   assert.equal(elements["#shared-names"].hidden, false);
-  assert.match(elements["#shared-names-message"].textContent, /named “Taylor”, so/);
+  assert.match(elements["#shared-names-message"].textContent, /named “Taylor” and “Work”, so/);
   const buttons = elements["#shared-names-actions"].children;
-  assert.deepEqual(buttons.map((button) => button.textContent), ["Rename Taylor (Profile 3)", "Rename Taylor (Profile 5)"]);
+  assert.deepEqual(buttons.map((button) => button.textContent), [
+    "Rename Taylor (Profile 3)", "Rename Taylor (Profile 5)", "Rename Work (Profile 6)", "Rename Work (Profile 7)",
+  ]);
 
   await buttons[1].listener();
   assert.deepEqual(JSON.parse(JSON.stringify(messages.at(-1))), { type: "open-profile-settings", profileDirectory: "Profile 5" });

@@ -80,7 +80,7 @@ Current releases require macOS 14 or later and an Apple silicon Mac.
 
 ## Why Accessibility access?
 
-Chrome does not provide a public API for bringing a specific profile window to the front. ProfileBar uses macOS Accessibility to raise a matching window first. If there is no window, it tries Chrome's profile command without showing the menu.
+Chrome does not provide a public API for bringing a specific profile window to the front. ProfileBar uses macOS Accessibility to raise a matching window first. If there is no window, it tries Chrome's profile command without showing the menu. Profiles that share a name have identical window titles, so ProfileBar always uses Chrome's profile command for them.
 
 ProfileBar reads Chrome's local profile list and saved avatars. Its helper checks
 the focused Chrome window title to identify the current profile for the

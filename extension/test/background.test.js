@@ -41,6 +41,7 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
     },
     windows: {
       WINDOW_ID_NONE: -1,
+      WINDOW_ID_CURRENT: -2,
       onFocusChanged: { addListener(listener) { listeners.focusChanged = listener; } },
       async getLastFocused() { return { focused: windowFocused }; },
     },
@@ -78,6 +79,10 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
     tabGroups: {
       onCreated: { addListener(listener) { listeners.groupCreated = listener; } },
       onRemoved: { addListener(listener) { listeners.groupRemoved = listener; } },
+      async query({ windowId }) {
+        assert.equal(windowId, -2, "group visibility should follow the current window");
+        return [...groups.values()].filter((group) => group.windowId === 1);
+      },
       async get(id) {
         if (!groups.has(id)) throw new Error("Group not found");
         return groups.get(id);
@@ -106,6 +111,7 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
     setOpenGate(gate) { openGate = gate; },
     setTab(tab) { tabs.set(tab.id, tab); },
     setGroup(group) { groups.set(group.id, group); },
+    deleteGroup(id) { groups.delete(id); },
     setGroupResponse(response) { groupResponse = response; },
   };
 }
@@ -157,16 +163,16 @@ test("group moves appear only while the focused window has a group", async () =>
   const groupItemsVisible = () => harness.menus
     .filter((item) => item.id === "tab:group-divider" || item.id.startsWith("group:"))
     .map((item) => item.visible);
-  harness.setTab({ id: 1, windowId: 1, groupId: -1 });
+  harness.setGroup({ id: 3, windowId: 2 });
   await harness.refresh();
-  assert.deepEqual(groupItemsVisible(), [false, false]);
+  assert.deepEqual(groupItemsVisible(), [false, false], "a group in another window should not count");
 
-  harness.setTab({ id: 2, windowId: 1, groupId: 7 });
+  harness.setGroup({ id: 7, windowId: 1 });
   harness.listeners.groupCreated({ id: 7, windowId: 1 });
   await harness.settle();
   assert.deepEqual(groupItemsVisible(), [true, true]);
 
-  harness.setTab({ id: 2, windowId: 1, groupId: -1 });
+  harness.deleteGroup(7);
   harness.listeners.groupRemoved({ id: 7, windowId: 1 });
   await harness.settle();
   assert.deepEqual(groupItemsVisible(), [false, false]);
@@ -176,17 +182,17 @@ test("group moves appear only while the focused window has a group", async () =>
 test("profiles that share a name are labelled by folder and reported to the setup page", async () => {
   const harness = menuHarness({ hostResponse: { ok: true, profiles: [
     { directory: "Profile 3", name: "Taylor" },
-    { directory: "Profile 5", name: "Taylor" },
+    { directory: "Profile 5", name: "taylor" },
     { directory: "Profile 2", name: "Work" },
   ] } });
   const result = await vm.runInContext("buildProfileMenu()", harness.context);
 
   assert.deepEqual(JSON.parse(JSON.stringify(result.sharedNameProfiles)), [
     { directory: "Profile 3", name: "Taylor" },
-    { directory: "Profile 5", name: "Taylor" },
+    { directory: "Profile 5", name: "taylor" },
   ]);
   assert.deepEqual(harness.menus.filter((item) => item.id.startsWith("profile:")).map((item) => item.title), [
-    "Taylor (Profile 3)", "Taylor (Profile 5)", "Work",
+    "Taylor (Profile 3)", "taylor (Profile 5)", "Work",
   ]);
 });
 
@@ -215,6 +221,11 @@ test("the setup page can ask ProfileBar to open another profile's settings", asy
   older.listeners.message({ type: "open-profile-settings", profileDirectory: "Profile 5" }, {}, (value) => { response = value; });
   await new Promise(setImmediate);
   assert.equal(response.result, "update-required");
+
+  const stale = menuHarness({ hostResponse: { ok: false, error: "profile_not_found" } });
+  stale.listeners.message({ type: "open-profile-settings", profileDirectory: "Profile 9" }, {}, (value) => { response = value; });
+  await new Promise(setImmediate);
+  assert.equal(response.result, "failed");
 });
 
 test("one known profile leaves refresh available", async () => {
