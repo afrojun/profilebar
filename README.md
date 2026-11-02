@@ -67,6 +67,10 @@ A rule matches a site and its subdomains, optionally under a path such as
 To check a rule, paste a link into **Test a link** in either editor. It names the
 profile the link opens in and the rule that sends it there.
 
+<p align="center">
+  <img src="docs/images/link-routing.png" width="540" alt="The Links tab of ProfileBar Settings with rules that send Atlassian, GitHub, and Google Docs links to Work, YouTube to Personal, and Vercel to Side project">
+</p>
+
 Links that match no rule stay where Chrome opens them. To send links from other
 apps that match no rule to one profile, as Finicky's default browser does,
 choose it under **Open other links from apps in**. Links that pages open never
@@ -93,7 +97,7 @@ Open **Settings…** from the ProfileBar button. It has three tabs:
 - **General**: start ProfileBar automatically when you sign in and check Accessibility access.
 
 <p align="center">
-  <img src="docs/images/settings.png" width="720" alt="ProfileBar settings with Personal, Work, and Side project profiles">
+  <img src="docs/images/settings.png" width="720" alt="The Profiles tab of ProfileBar Settings with shortcuts for the Personal, Side project, and Work profiles">
 </p>
 
 Profile shortcuts work from any app. ProfileBar only registers the combinations you assign; it does not monitor what you type.
