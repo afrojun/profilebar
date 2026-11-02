@@ -1,0 +1,85 @@
+{
+  "about": "Shared by extension/test/routing-rules.test.js and Tests/ProfileBarTests.swift, so both rule matchers pick the same winner. Each case names the winning rule's id, or null when no rule matches.",
+  "groups": [
+    {
+      "name": "a site rule matches the host and its subdomains, then an optional path",
+      "rules": [
+        { "id": "team", "kind": "host", "host": "github.com", "pathPrefix": "/team", "profileDirectory": "Work" }
+      ],
+      "cases": [
+        { "url": "https://github.com/team/repo", "rule": "team" },
+        { "url": "https://gist.github.com/Team/x", "rule": "team" },
+        { "url": "HTTPS://GitHub.com/team", "rule": "team" },
+        { "url": "https://github.com/other", "rule": null },
+        { "url": "https://notgithub.com/team", "rule": null },
+        { "url": "https://github.com/a/../team/repo", "rule": "team" },
+        { "url": "https://github.com:8443/team", "rule": "team" },
+        { "url": "https://github.com/a/%2e%2e/team", "rule": "team" },
+        { "url": "https://github.com/a/.%2E/team", "rule": "team" },
+        { "url": "https://github.com/%2e/team", "rule": "team" },
+        { "url": "https://github.com/a%2eb/team", "rule": null },
+        { "url": "https://github.com/%2e%2e/team", "rule": "team" },
+        { "url": "https://github.com/../../team/x", "rule": "team" },
+        { "url": "https://github.com/team/..", "rule": null },
+        { "url": "chrome://settings", "rule": null },
+        { "url": "not a link", "rule": null }
+      ]
+    },
+    {
+      "name": "site rules beat contains rules, the more specific rule wins, and list order breaks ties",
+      "rules": [
+        { "id": "contains", "kind": "contains", "text": "acme", "profileDirectory": "Contains" },
+        { "id": "site", "kind": "host", "host": "github.com", "pathPrefix": "", "profileDirectory": "Personal" },
+        { "id": "path", "kind": "host", "host": "github.com", "pathPrefix": "/team", "profileDirectory": "Work" },
+        { "id": "api", "kind": "host", "host": "api.github.com", "pathPrefix": "", "profileDirectory": "Api" },
+        { "id": "first", "kind": "host", "host": "example.com", "pathPrefix": "", "profileDirectory": "First" },
+        { "id": "second", "kind": "host", "host": "example.com", "pathPrefix": "", "profileDirectory": "Second" },
+        { "id": "short", "kind": "contains", "text": "doc", "profileDirectory": "Short" },
+        { "id": "long", "kind": "contains", "text": "docs.google", "profileDirectory": "Long" }
+      ],
+      "cases": [
+        { "url": "https://github.com/team", "rule": "path" },
+        { "url": "https://github.com/someone", "rule": "site" },
+        { "url": "https://api.github.com/team", "rule": "api" },
+        { "url": "https://example.org/?q=acme", "rule": "contains" },
+        { "url": "https://example.com/", "rule": "first" },
+        { "url": "https://docs.google.com/", "rule": "long" }
+      ]
+    },
+    {
+      "name": "contains rules ignore case and the fragment, as Chrome's request filters do",
+      "rules": [
+        { "id": "report", "kind": "contains", "text": "Report", "profileDirectory": "Work" },
+        { "id": "slash", "kind": "contains", "text": "example.net/", "profileDirectory": "Work" }
+      ],
+      "cases": [
+        { "url": "https://example.com/report", "rule": "report" },
+        { "url": "https://example.com/#report", "rule": null },
+        { "url": "https://example.net", "rule": "slash" }
+      ]
+    },
+    {
+      "name": "international sites match their punycode form",
+      "rules": [
+        { "id": "books", "kind": "host", "host": "xn--bcher-kva.example", "pathPrefix": "", "profileDirectory": "Work" }
+      ],
+      "cases": [
+        { "url": "https://bücher.example/x", "rule": "books" },
+        { "url": "https://xn--bcher-kva.example/x", "rule": "books" }
+      ]
+    },
+    {
+      "name": "sign-in sites never match, even through a rule for their parent site",
+      "rules": [
+        { "id": "google", "kind": "host", "host": "google.com", "pathPrefix": "", "profileDirectory": "Work" },
+        { "id": "okta", "kind": "contains", "text": "okta", "profileDirectory": "Work" }
+      ],
+      "cases": [
+        { "url": "https://mail.google.com/", "rule": "google" },
+        { "url": "https://accounts.google.com/signin", "rule": null },
+        { "url": "https://acme.okta.com/app", "rule": null },
+        { "url": "https://example.com/?from=okta", "rule": "okta" }
+      ]
+    }
+  ]
+}

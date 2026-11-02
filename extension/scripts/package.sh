@@ -16,11 +16,15 @@ zip -q -FS "$archive" \
   icons/icon-32.png \
   icons/icon-48.png \
   icons/icon-128.png \
+  identify.html \
+  identify.js \
   manage-profile.html \
   manage-profile.js \
   manifest.json \
   move-status.html \
   move-status.js \
+  router.js \
+  routing-rules.js \
   setup.css \
   setup.html \
   setup.js

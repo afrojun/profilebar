@@ -12,10 +12,19 @@ const messages = {
   "not-in-group": "This tab is not in a group. Right-click a tab inside the group and try again.",
   "group-changed": "Chrome could not identify that tab group. Nothing was moved. Expand the group and right-click one of its tabs.",
   "group-opened-ungrouped": "The tabs opened in the selected profile without a group. Install ProfileBar for Chrome in that profile to keep the group next time.",
+  "sign-in-site": "Sign-in sites can’t be routed, because every profile needs them to sign in. No rule was added.",
+  "rule-not-saved": "ProfileBar could not save the rule. Open the ProfileBar for Chrome options to check your rules.",
+  "rules-update-required": "Update ProfileBar to add link-routing rules.",
+};
+const headings = {
+  "group-opened-ungrouped": "Tabs moved without a group",
+  "sign-in-site": "Could not add the rule",
+  "rule-not-saved": "Could not add the rule",
+  "rules-update-required": "Could not add the rule",
 };
 
 const status = location.hash.slice(1);
-if (status === "group-opened-ungrouped") {
-  document.querySelector("#heading").textContent = "Tabs moved without a group";
+if (headings[status]) {
+  document.querySelector("#heading").textContent = headings[status];
 }
 document.querySelector("#detail").textContent = messages[status] ?? messages["open-failed"];

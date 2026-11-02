@@ -2,14 +2,17 @@
 
 ## Purpose
 
-ProfileBar for Chrome is a Manifest V3 extension that moves the tabs a user chooses to another Chrome profile. It owns the right-click menus and the destination group receiver. The ProfileBar app's native helper (`../Sources/NativeHost`) lists profiles and opens the URLs.
+ProfileBar for Chrome is a Manifest V3 extension that moves the tabs a user chooses to another Chrome profile and routes new tabs to the profile their link-routing rule names. It owns the right-click menus, the destination group receiver, and the link router. The design is in [link-routing-design.md](../docs/link-routing-design.md). The ProfileBar app's native helper (`../Sources/NativeHost`) lists profiles and opens the URLs.
 
 URL copying belongs to the separate Instant Copy URL extension. Do not add it here.
 
 ## Product invariants
 
 - Close source tabs only after ProfileBar reports success, and only if they are unchanged. Otherwise leave them open and explain why.
-- Never send a URL anywhere except the local native host, and only after an explicit menu choice.
+- Never send a URL anywhere except the local native host, and only after an explicit menu choice, when a user's link-routing rule names another profile for a new tab, or when the user's fallback profile takes an unmatched link from another app.
+- Link routing acts only on new tabs and never on popups, arrivals, sign-in sites, or tabs created in the first 3 seconds after the extension starts. Arrivals open blank and load their URL after request blocking skips them.
+- `routing-rules.js` defines rule precedence, and the request-blocking priorities must pick the same winner. Change both together. ProfileBar Settings has a Swift copy of the matcher for **Test a link**. Add matching cases to `test/routing-cases.json`, which both test suites read, and keep the sign-in host list the same in both.
+- Reload a tab after a request block at most once, because another extension may block it too.
 - Only HTTP and HTTPS URLs can move.
 - When the focused profile cannot be identified, show every destination rather than guessing.
 - If the destination cannot recreate a group, ProfileBar opens the URLs without one. If the receiver claims a group but fails, the source group stays open.
@@ -18,8 +21,11 @@ URL copying belongs to the separate Instant Copy URL extension. Do not add it he
 ## Layout
 
 - `background.js`: menu state, move flow, and the setup page's connection check.
+- `router.js`: link routing in the service worker. It tracks new tabs, keeps the request-blocking rules, asks ProfileBar to route matching tabs, and opens arrivals.
+- `routing-rules.js`: rule matching, precedence, and request-blocking rules, shared by the service worker and the setup page.
+- `identify.*`: ProfileBar opens it in each profile so this copy of the extension learns its profile directory.
 - `group-receiver.*`: claims a group handoff in the destination profile and recreates it.
-- `setup.*`: first-run and options page with a live ProfileBar connection check.
+- `setup.*`: first-run and options page with a live ProfileBar connection check and the link-routing settings.
 - `move-status.*`: explains a failed or partial move.
 - `manage-profile.*`: ProfileBar opens it in a chosen profile so it can show that profile's `chrome://settings/manageProfile`, which Chrome will not open from the command line. The setup page's rename buttons use it when profiles share a name.
 - Store-installed builds talk to `dev.afrojun.profilebar`. Unpacked builds have no `update_url` and talk to `dev.afrojun.profilebar.dev`, which ProfileBar Dev registers.

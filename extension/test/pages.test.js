@@ -11,13 +11,15 @@ function runScript(file, context) {
   vm.runInNewContext(source, context);
 }
 
-test("manifest requires ProfileBar access and no page access", () => {
+test("manifest requires ProfileBar access, routing permissions, and no page access", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, "ProfileBar for Chrome");
   assert.ok(manifest.description.length <= 132);
-  assert.deepEqual(manifest.permissions, ["contextMenus", "nativeMessaging", "tabGroups", "tabs"]);
+  assert.deepEqual(manifest.permissions, [
+    "contextMenus", "declarativeNetRequest", "nativeMessaging", "storage", "tabGroups", "tabs", "webNavigation",
+  ]);
   assert.equal(manifest.optional_permissions, undefined);
   assert.equal(manifest.host_permissions, undefined);
   assert.equal(manifest.commands, undefined);
@@ -30,6 +32,7 @@ test("the destination receiver recreates a group before acknowledging the move",
   const chrome = {
     runtime: {
       getManifest() { return { update_url: "https://clients2.google.com/service/update2/crx" }; },
+      async sendMessage(message) { calls.push(["message", message]); return { ok: true }; },
       async sendNativeMessage(host, message) {
         calls.push(["native", host, message]);
         return message.type === "claimGroup"
@@ -44,6 +47,7 @@ test("the destination receiver recreates a group before acknowledging the move",
         calls.push(["create", options]);
         return { id: calls.filter(([type]) => type === "create").length + 10 };
       },
+      async update(id, { url }) { calls.push(["load", id, url]); },
       async group(options) { calls.push(["group", options]); return 22; },
       async remove(ids) { calls.push(["remove", ids]); },
     },
@@ -60,8 +64,11 @@ test("the destination receiver recreates a group before acknowledging the move",
   });
   await new Promise(setImmediate);
 
-  assert.deepEqual(calls.filter(([type]) => type === "create").map(([, options]) => options.url), [
-    "https://example.com/first", "https://example.com/second",
+  // Each tab opens blank and loads its URL only after link routing keeps it, so routing never blocks it.
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.slice(1, 7).map(([type, details, url]) =>
+    type === "create" ? [type, details.url] : type === "message" ? [details.type, details.tabIds] : [type, details, url]))), [
+    ["create", "about:blank"], ["keep-tabs", [11]], ["load", 11, "https://example.com/first"],
+    ["create", "about:blank"], ["keep-tabs", [12]], ["load", 12, "https://example.com/second"],
   ]);
   assert.deepEqual(Array.from(calls.find(([type]) => type === "group")[1].tabIds), [11, 12]);
   assert.deepEqual(JSON.parse(JSON.stringify(calls.find(([type]) => type === "update")[2])), {
@@ -77,6 +84,7 @@ test("a failed destination group removes created tabs and reports failure", asyn
   const chrome = {
     runtime: {
       getManifest() { return { update_url: "https://clients2.google.com/service/update2/crx" }; },
+      async sendMessage() { return { ok: true }; },
       async sendNativeMessage(host, message) {
         calls.push(["native", message]);
         return message.type === "claimGroup"
@@ -89,9 +97,10 @@ test("a failed destination group removes created tabs and reports failure", asyn
       async getCurrent() { return { id: 7, windowId: 4, index: 2 }; },
       async create(options) {
         calls.push(["create", options]);
-        if (options.url.endsWith("second")) throw new Error("Chrome could not create the tab");
+        if (calls.filter(([type]) => type === "create").length === 2) throw new Error("Chrome could not create the tab");
         return { id: 11 };
       },
+      async update() {},
       async remove(ids) { calls.push(["remove", ids]); },
     },
   };
@@ -109,43 +118,135 @@ test("a failed destination group removes created tabs and reports failure", asyn
   assert.deepEqual(calls.at(-1), ["remove", 7]);
 });
 
-function fakeElement() {
+test("a group move fails without loading its pages when link routing cannot keep the tabs", async () => {
+  const calls = [];
+  const chrome = {
+    runtime: {
+      getManifest() { return { update_url: "https://clients2.google.com/service/update2/crx" }; },
+      async sendMessage() { return { ok: false }; },
+      async sendNativeMessage(host, message) {
+        calls.push(["native", message]);
+        return message.type === "claimGroup"
+          ? { ok: true, urls: ["https://example.com/first"], group: { title: "Research", color: "blue", collapsed: false } }
+          : { ok: true };
+      },
+    },
+    tabs: {
+      async getCurrent() { return { id: 7, windowId: 4, index: 2 }; },
+      async create() { return { id: 11 }; },
+      async update(id, { url }) { calls.push(["load", id, url]); },
+      async remove(ids) { calls.push(["remove", ids]); },
+    },
+  };
+
+  runScript("group-receiver.js", {
+    chrome,
+    location: { hash: "#a74ac3fb-1e22-49cc-84ce-efb579d7ade1", pathname: "/group-receiver.html" },
+    history: { replaceState() {} },
+    console: { error() {}, debug() {} },
+  });
+  await new Promise(setImmediate);
+
+  assert.equal(calls.some(([type]) => type === "load"), false);
+  assert.deepEqual(Array.from(calls.find(([type, ids]) => type === "remove" && Array.isArray(ids))[1]), [11]);
+  assert.equal(calls.find(([type, message]) => type === "native" && message.type === "completeGroup")[1].ok, false,
+    "the source group stays open");
+});
+
+// A small stand-in for the DOM operations that setup.js uses.
+function fakeElement(tagName = "div") {
   const element = {
+    tagName: tagName.toUpperCase(),
     dataset: {},
+    attributes: {},
+    listeners: {},
     hidden: false,
     disabled: false,
+    checked: false,
     textContent: "",
+    className: "",
     children: [],
-    addEventListener(type, listener) { element.listener = listener; },
-    replaceChildren(...children) { element.children = children; },
+    parent: null,
+    addEventListener(type, listener) {
+      element.listener = listener;
+      element.listeners[type] = listener;
+    },
+    append(...children) {
+      for (const child of children) {
+        child.parent = element;
+        element.children.push(child);
+      }
+    },
+    replaceChildren(...children) {
+      element.children = [];
+      element.append(...children);
+    },
+    remove() { element.parent?.children.splice(element.parent.children.indexOf(element), 1); },
+    setAttribute(name, value) { element.attributes[name] = String(value); },
+    getAttribute(name) { return element.attributes[name] ?? null; },
+    focus() {},
+    querySelectorAll(selector) {
+      const matches = (node) => (selector.startsWith(".")
+        ? node.className === selector.slice(1)
+        : node.tagName === selector.toUpperCase());
+      const found = [];
+      const visit = (node) => node.children?.forEach((child) => {
+        if (matches(child)) found.push(child);
+        visit(child);
+      });
+      visit(element);
+      return found;
+    },
+    querySelector(selector) { return element.querySelectorAll(selector)[0] ?? null; },
   };
+  if (element.tagName === "SELECT") {
+    Object.defineProperty(element, "value", {
+      get() { return (element.children.find((option) => option.selected) ?? element.children[0])?.value; },
+      set(value) { for (const option of element.children) option.selected = option.value === value; },
+    });
+  } else {
+    element.value = "";
+  }
   return element;
 }
 
+const setupSelectors = {
+  "#status": "p", "#heading": "h1", "#intro": "p", "#steps": "ol", "#check": "button", "#get-profilebar": "a",
+  "#shared-names": "div", "#shared-names-message": "p", "#shared-names-actions": "div", "#shared-names-result": "p",
+  "#routing": "section", "#routing-status": "p", "#routing-identity": "div", "#routing-identity-message": "p",
+  "#identify": "button", "#identify-result": "p", "#routing-controls": "div", "#route-other-apps": "input",
+  "#route-web-pages": "input", "#fallback-profile": "select", "#rule-rows": "tbody", "#no-rules": "p", "#add-rule": "button",
+  "#routing-result": "p", "#link-test": "input", "#link-test-result": "p",
+};
+
 function setupHarness(chrome) {
   const elements = {};
-  for (const selector of [
-    "#status", "#heading", "#intro", "#steps", "#check", "#get-profilebar",
-    "#shared-names", "#shared-names-message", "#shared-names-actions", "#shared-names-result",
-  ]) {
-    elements[selector] = fakeElement();
-  }
+  for (const [selector, tagName] of Object.entries(setupSelectors)) elements[selector] = fakeElement(tagName);
   const listeners = {};
-  runScript("setup.js", {
+  let nextUUID = 1;
+  const context = vm.createContext({
     chrome,
+    URL,
     console: { error() {} },
+    crypto: { randomUUID: () => `new-${nextUUID++}` },
     document: { querySelector: (selector) => elements[selector], createElement: fakeElement },
     Intl,
+    Option: function Option(text, value, defaultSelected, selected) {
+      return { tagName: "OPTION", text, value, selected };
+    },
     window: { addEventListener(type, listener) { listeners[type] = listener; } },
   });
+  for (const file of ["routing-rules.js", "setup.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
+  }
   return { elements, listeners };
 }
 
 test("the setup page shows connected profiles without setup steps", async () => {
   const { elements } = setupHarness({
     runtime: { async sendMessage(message) {
-      assert.equal(message.type, "check-profilebar");
-      return { state: "ready", destinationCount: 1 };
+      assert.ok(["check-profilebar", "get-link-routing"].includes(message.type));
+      return message.type === "check-profilebar" ? { state: "ready", destinationCount: 1 } : { status: "connected" };
     } },
   });
   await new Promise(setImmediate);
@@ -227,4 +328,131 @@ test("the move status page explains the error code", () => {
 
   runScript("move-status.js", { document, location: { hash: "#unknown" } });
   assert.match(elements["#detail"].textContent, /could not open the selected pages/);
+});
+
+const flush = () => new Promise(setImmediate);
+const plain = (value) => JSON.parse(JSON.stringify(value));
+const routingProfiles = [{ directory: "Default", title: "Personal" }, { directory: "Profile 2", title: "Work" }];
+
+function routingSetup({ routing, onSave = () => ({ ok: true }), onIdentify }) {
+  const messages = [];
+  const harness = setupHarness({ runtime: { async sendMessage(message) {
+    messages.push(plain(message));
+    if (message.type === "check-profilebar") return { state: "ready", destinationCount: 1, profiles: routingProfiles };
+    if (message.type === "get-link-routing") return routing;
+    if (message.type === "save-link-routing") return onSave(message);
+    if (message.type === "identify-profiles") return onIdentify();
+    return undefined;
+  } } });
+  return { ...harness, messages };
+}
+
+const savedRules = {
+  version: 1,
+  routeFrom: { otherApps: true, webPages: false },
+  rules: [
+    { id: "a", kind: "host", host: "github.com", pathPrefix: "/team", profileDirectory: "Profile 2" },
+    { id: "b", kind: "contains", text: "docs.google.com/a/acme", profileDirectory: "Profile 2" },
+  ],
+};
+
+test("the setup page lists link-routing rules and saves each edit", async () => {
+  const { elements, messages } = routingSetup({
+    routing: { status: "connected", profileDirectory: "Default", settings: savedRules },
+  });
+  await flush();
+
+  assert.equal(elements["#routing"].hidden, false);
+  assert.equal(elements["#routing-controls"].hidden, false);
+  assert.match(elements["#routing-identity-message"].textContent, /^This is Personal\./);
+  assert.equal(elements["#route-other-apps"].checked, true);
+  assert.equal(elements["#route-web-pages"].checked, false);
+  const rows = elements["#rule-rows"].children;
+  assert.deepEqual(rows.map((row) => row.querySelector("input").value), ["github.com/team", "docs.google.com/a/acme"]);
+  assert.deepEqual(rows.map((row) => row.querySelectorAll("select")[1].value), ["Profile 2", "Profile 2"]);
+
+  const site = rows[0].querySelector("input");
+  site.value = "https://GitHub.com/acme";
+  site.listeners.change();
+  await flush();
+  const saved = messages.at(-1);
+  assert.equal(saved.type, "save-link-routing");
+  assert.deepEqual(saved.settings.rules[0], {
+    id: "a", kind: "host", host: "github.com", pathPrefix: "/acme", profileDirectory: "Profile 2",
+  });
+  assert.deepEqual(saved.settings.routeFrom, { otherApps: true, webPages: false });
+  assert.equal(elements["#routing-result"].textContent, "Saved.");
+
+  elements["#add-rule"].listener();
+  assert.equal(elements["#rule-rows"].children.length, 3);
+  assert.equal(elements["#rule-rows"].children[2].querySelectorAll("select")[1].value, "Profile 2",
+    "a new rule defaults to another profile");
+  elements["#route-web-pages"].checked = true;
+  elements["#route-web-pages"].listeners.change();
+  await flush();
+  assert.equal(messages.at(-1).settings.rules.length, 2, "an empty new rule is not saved yet");
+  assert.equal(messages.at(-1).settings.routeFrom.webPages, true);
+
+  const linkTest = elements["#link-test"];
+  linkTest.value = "https://github.com/acme/repo";
+  linkTest.listeners.input();
+  assert.equal(elements["#link-test-result"].textContent, "Opens in Work, using the site rule github.com/acme.");
+  linkTest.value = "https://accounts.google.com/signin";
+  linkTest.listeners.input();
+  assert.equal(elements["#link-test-result"].textContent, "Sign-in sites always stay where they open.");
+  linkTest.value = "https://example.com/";
+  linkTest.listeners.input();
+  assert.equal(elements["#link-test-result"].textContent, "No rule matches, so it stays where Chrome opens it.");
+
+  const fallback = elements["#fallback-profile"];
+  assert.equal(fallback.value, "", "unmatched links stay where Chrome opens them by default");
+  assert.equal(fallback.disabled, false);
+  fallback.value = "Profile 2";
+  fallback.listeners.change();
+  await flush();
+  assert.equal(messages.at(-1).settings.fallbackProfileDirectory, "Profile 2");
+  assert.equal(elements["#link-test-result"].textContent,
+    "No rule matches. From other apps it opens in Work. From web pages it stays where it opened.");
+  elements["#route-other-apps"].checked = false;
+  elements["#route-other-apps"].listeners.change();
+  assert.equal(fallback.disabled, true, "the fallback applies only to links from other apps");
+});
+
+test("the setup page shows a rejected rule next to its row", async () => {
+  const { elements } = routingSetup({
+    routing: { status: "connected", profileDirectory: "Default", settings: savedRules },
+    onSave: () => ({ ok: false, ruleIndex: 1, message: "Sign-in sites can’t be routed." }),
+  });
+  await flush();
+  const rows = elements["#rule-rows"].children;
+  rows[1].querySelector("input").listeners.change();
+  await flush();
+  assert.equal(rows[1].querySelector("input").getAttribute("aria-invalid"), "true");
+  assert.equal(rows[1].querySelector(".rule-error").textContent, "Sign-in sites can’t be routed.");
+  assert.equal(rows[0].querySelector("input").getAttribute("aria-invalid"), "false");
+  assert.equal(elements["#routing-result"].textContent, "Not saved. Fix the highlighted rule.");
+});
+
+test("an unidentified profile is asked to identify, and the result names profiles that did not answer", async () => {
+  const { elements, messages } = routingSetup({
+    routing: { status: "connected", profileDirectory: null, settings: { ...savedRules, rules: [] } },
+    onIdentify: () => ({ ok: true, identified: ["Default"], unreachable: ["Profile 2"] }),
+  });
+  await flush();
+  assert.match(elements["#routing-identity-message"].textContent, /not identified yet/);
+  assert.equal(elements["#no-rules"].hidden, false);
+
+  elements["#identify"].listener();
+  await flush();
+  assert.ok(messages.some((message) => message.type === "identify-profiles"));
+  assert.equal(elements["#identify-result"].textContent,
+    "Identified Personal. Work did not answer. Open it in Chrome and try again.");
+});
+
+test("an older ProfileBar hides the rules and asks for an update", async () => {
+  const { elements } = routingSetup({ routing: { status: "update-required" } });
+  await flush();
+  assert.equal(elements["#routing-controls"].hidden, true);
+  assert.equal(elements["#routing-identity"].hidden, true);
+  assert.match(elements["#routing-status"].textContent, /Update ProfileBar to version 1\.5/);
 });

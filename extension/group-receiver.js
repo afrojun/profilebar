@@ -21,15 +21,19 @@ async function receiveGroup() {
     const response = await chrome.runtime.sendNativeMessage(NATIVE_HOST, { type: "claimGroup", token });
     if (!response?.ok || !Array.isArray(response.urls) || !response.group) return;
     claimed = true;
-
+    // These tabs belong here even if a link-routing rule names another profile, so each opens blank until link
+    // routing keeps it. If Chrome refused the rules, an old rule could block the page, so the move fails instead.
     for (const url of response.urls) {
       const tab = await chrome.tabs.create({
-        url,
+        url: "about:blank",
         windowId: receiverTab.windowId,
         index: receiverTab.index + 1 + createdTabs.length,
         active: false,
       });
       createdTabs.push(tab.id);
+      const kept = await chrome.runtime.sendMessage({ type: "keep-tabs", tabIds: [tab.id] }).catch(() => null);
+      if (!kept?.ok) throw new Error("Link routing could not keep the tab in this profile.");
+      await chrome.tabs.update(tab.id, { url });
     }
     const groupId = await chrome.tabs.group({
       tabIds: createdTabs,

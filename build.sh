@@ -72,6 +72,7 @@ swiftc -target "arm64-apple-macos${minimum_macos_version}" -O -warnings-as-error
   -framework AppKit -framework ApplicationServices -framework Carbon -framework ServiceManagement \
   "$project_dir/Sources/ProfileBar/ChromeProfile.swift" \
   "$project_dir/Sources/ProfileBar/ChromeProfileActivator.swift" \
+  "$project_dir/Sources/ProfileBar/LinkRouting.swift" \
   "$project_dir/Sources/ProfileBar/NativeHostRegistration.swift" \
   "$project_dir/Sources/ProfileBar/GlobalHotKeyRegistrar.swift" \
   "$project_dir/Sources/ProfileBar/ChromeWindowTitleMatcher.swift" \
@@ -79,6 +80,7 @@ swiftc -target "arm64-apple-macos${minimum_macos_version}" -O -warnings-as-error
   "$project_dir/Sources/ProfileBar/ProfileAvatarRenderer.swift" \
   "$project_dir/Sources/ProfileBar/ProfileShortcut.swift" \
   "$project_dir/Sources/ProfileBar/ShortcutRecorderButton.swift" \
+  "$project_dir/Sources/ProfileBar/LinkRoutingSettingsView.swift" \
   "$project_dir/Sources/ProfileBar/SettingsWindowController.swift" \
   "$project_dir/Sources/ProfileBar/UpdateChecker.swift" \
   "$project_dir/Sources/ProfileBar/main.swift" \
@@ -87,9 +89,14 @@ swiftc -target "arm64-apple-macos${minimum_macos_version}" -O -warnings-as-error
   -framework AppKit -framework ApplicationServices \
   "$project_dir/Sources/ProfileBar/ChromeProfile.swift" \
   "$project_dir/Sources/ProfileBar/ChromeWindowTitleMatcher.swift" \
+  "$project_dir/Sources/ProfileBar/LinkRouting.swift" \
   "$project_dir/Sources/NativeHost/ChromeFocusedProfile.swift" \
   "$project_dir/Sources/NativeHost/ProfileBridge.swift" \
   "$project_dir/Sources/NativeHost/GroupHandoff.swift" \
+  "$project_dir/Sources/NativeHost/HandoffRelay.swift" \
+  "$project_dir/Sources/NativeHost/LocalSocket.swift" \
+  "$project_dir/Sources/NativeHost/ProfileRelay.swift" \
+  "$project_dir/Sources/NativeHost/RoutingSession.swift" \
   "$project_dir/Sources/NativeHost/NativeMessagingHost.swift" \
   -o "$contents_dir/MacOS/ProfileBarNativeHost"
 

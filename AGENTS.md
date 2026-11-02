@@ -22,8 +22,9 @@ ProfileBar is a native macOS menu-bar app. One action must switch to an open Chr
 - `ChromeProfile.swift` owns profile loading and validation.
 - `ChromeProfileActivator.swift` owns normal switch-or-open activation.
 - `NativeHostRegistration.swift` registers Chrome's local native messaging host.
-- `Sources/NativeHost` handles explicit open-URL requests from the extension.
-- `extension/` is the ProfileBar for Chrome extension. It owns the move menus, the group receiver, and its setup page. Change the native messaging protocol and both of its ends in the same pull request. See [extension/AGENTS.md](extension/AGENTS.md).
+- `Sources/NativeHost` handles explicit open-URL requests from the extension. `RoutingSession.swift` serves link-routing settings over a persistent connection, and `ProfileRelay.swift` passes routed URLs between profiles over local sockets.
+- `LinkRouting.swift` owns the link-routing rules, their validation, and the rules file. `LinkRoutingSettingsView.swift` edits them in Settings. See [docs/link-routing-design.md](docs/link-routing-design.md).
+- `extension/` is the ProfileBar for Chrome extension. It owns the move menus, the group receiver, the link router, and its setup page. Change the native messaging protocol and both of its ends in the same pull request. See [extension/AGENTS.md](extension/AGENTS.md).
 - `ChromeWindowTitleMatcher.swift` owns Chrome label matching and should remain independently testable.
 - `ProfileShortcut.swift` owns persisted shortcut values and profile-icon visibility.
 - `GlobalHotKeyRegistrar.swift` owns Carbon hotkey registration and dispatch only.

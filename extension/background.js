@@ -7,6 +7,10 @@ const TAB_MENU_ROOT = "tab-actions";
 const MENU_SETUP = "setup-profilebar";
 const MENU_REFRESH = "refresh-profiles";
 const PROFILE_PREFIX = "profile:";
+const ALWAYS_MENU_ROOT = "always-open-site";
+const ALWAYS_PREFIX = "always:";
+
+importScripts("routing-rules.js", "router.js");
 
 let menuRefresh = Promise.resolve();
 // Chrome does not say which tab was right-clicked before it shows the menu, so the group actions
@@ -54,9 +58,13 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     void refreshProfileMenu();
     return;
   }
+  if (itemId.startsWith(ALWAYS_PREFIX)) {
+    void alwaysOpenSite(decodeURIComponent(itemId.slice(ALWAYS_PREFIX.length)), info, tab);
+    return;
+  }
   if (menuId.startsWith(PROFILE_PREFIX)) {
     const mode = itemId.startsWith("group:") ? "group" : itemId.startsWith("tab:") ? "tab" : "page";
-    void moveToProfile(menuId, info, tab, mode);
+    void moveToProfile(decodeURIComponent(menuId.slice(PROFILE_PREFIX.length)), info, tab, mode);
   }
 });
 
@@ -85,7 +93,8 @@ async function focusedWindowHasGroup() {
 }
 
 async function buildProfileMenu() {
-  let profiles;
+  let destinations; // every profile except the focused one, when ProfileBar can tell which that is
+  let allProfiles = [];
   let sharedNameProfiles = [];
   const platform = await chrome.runtime.getPlatformInfo();
   // ProfileBar's native helper is macOS-only. Drop this check when it runs elsewhere.
@@ -96,15 +105,16 @@ async function buildProfileMenu() {
       if (!response?.ok || !Array.isArray(response.profiles) || !response.profiles.every(
         (profile) => profile && typeof profile.directory === "string" && typeof profile.name === "string",
       )) throw new Error("Invalid profile list");
-      profiles = response.profiles;
-      const sharedNames = sharedProfileNames(profiles);
-      sharedNameProfiles = profiles
+      allProfiles = response.profiles;
+      destinations = allProfiles;
+      const sharedNames = sharedProfileNames(allProfiles);
+      sharedNameProfiles = allProfiles
         .filter(({ name }) => sharedNames.has(nameKey(name)))
         .map(({ directory, name }) => ({ directory, name }));
-      if (profiles.some(({ directory }) => directory === response.focusedProfileDirectory)) {
+      if (allProfiles.some(({ directory }) => directory === response.focusedProfileDirectory)) {
         const window = await chrome.windows.getLastFocused().catch(() => null);
         if (window?.focused) {
-          profiles = profiles.filter(({ directory }) => directory !== response.focusedProfileDirectory);
+          destinations = allProfiles.filter(({ directory }) => directory !== response.focusedProfileDirectory);
         }
       }
       state = "ready";
@@ -115,11 +125,15 @@ async function buildProfileMenu() {
 
   await removeMenus();
   groupMenuIds = [];
-  await buildPageMenu(state, profiles);
-  if (chrome.contextMenus.ContextType?.TAB) {
-    await buildTabMenu(state, profiles);
+  const named = namedProfiles(allProfiles);
+  await buildPageMenu(state, destinations);
+  if (state === "ready" && named.length > 0) {
+    await buildAlwaysOpenMenu(named);
   }
-  return { state, destinationCount: profiles?.length ?? 0, sharedNameProfiles };
+  if (chrome.contextMenus.ContextType?.TAB) {
+    await buildTabMenu(state, destinations);
+  }
+  return { state, destinationCount: destinations?.length ?? 0, sharedNameProfiles, profiles: named };
 }
 
 async function buildPageMenu(state, profiles) {
@@ -146,6 +160,20 @@ async function buildPageMenu(state, profiles) {
   }
   await createMenu({ id: "profiles-refresh-divider", parentId, type: "separator", contexts });
   await createMenu({ id: MENU_REFRESH, parentId, title: "Refresh profiles", contexts });
+}
+
+// Lists every profile, including this one, because a rule can keep a site here.
+async function buildAlwaysOpenMenu(profiles) {
+  const contexts = ["page"];
+  await createMenu({ id: ALWAYS_MENU_ROOT, title: "Always open this site in", contexts });
+  for (const profile of profiles) {
+    await createMenu({
+      id: `${ALWAYS_PREFIX}${encodeURIComponent(profile.directory)}`,
+      parentId: ALWAYS_MENU_ROOT,
+      title: profile.title,
+      contexts,
+    });
+  }
 }
 
 async function buildTabMenu(state, profiles) {
@@ -261,7 +289,8 @@ async function openProfileSettings(profileDirectory) {
   }
 }
 
-async function moveToProfile(menuId, info, tab, mode) {
+async function moveToProfile(profileDirectory, info, tab, mode) {
+  await routerStartupSettled();
   if (!Number.isInteger(tab?.id)) {
     await showMoveError("source-unavailable");
     return;
@@ -295,7 +324,6 @@ async function moveToProfile(menuId, info, tab, mode) {
 
   let response;
   try {
-    const profileDirectory = decodeURIComponent(menuId.slice(PROFILE_PREFIX.length));
     const urls = sourceTabs.map(({ url }) => url);
     const request = source.group
       ? { type: "openGroup", profileDirectory, urls, group: {
@@ -381,6 +409,25 @@ async function closeSourceTabs(sourceTabs, group) {
     console.error("Could not close the original tab:", error);
     await showMoveError("close-failed");
     return false;
+  }
+}
+
+// Adds a rule for the page's host, then moves the page there unless this is that profile.
+async function alwaysOpenSite(profileDirectory, info, tab) {
+  const url = info.pageUrl ?? tab?.url;
+  if (!RoutingRules.isWebUrl(url)) {
+    await showMoveError("unsupported-url");
+    return;
+  }
+  const result = await addSiteRule(url, profileDirectory);
+  if (!result.ok) {
+    const codes = { "sign_in_host": "sign-in-site", "update-required": "rules-update-required" };
+    await showMoveError(codes[result.error] ?? "rule-not-saved");
+    return;
+  }
+  // Without a known identity this may be the chosen profile, so the page stays put.
+  if (routing.profileDirectory && profileDirectory !== routing.profileDirectory) {
+    await moveToProfile(profileDirectory, info, tab, "page");
   }
 }
 
