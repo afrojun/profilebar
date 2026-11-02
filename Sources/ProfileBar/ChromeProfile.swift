@@ -14,7 +14,7 @@ struct ChromeProfile: Equatable {
         self.personName = personName
     }
 
-    private static func isValidDirectory(_ directory: String) -> Bool {
+    static func isValidDirectory(_ directory: String) -> Bool {
         !directory.isEmpty
             && directory != "."
             && directory != ".."

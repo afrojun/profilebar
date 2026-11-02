@@ -45,16 +45,52 @@ Chrome installs extensions per profile, so add ProfileBar for Chrome to each
 profile you move tabs from. To copy tab URLs, use
 [Instant Copy URL](https://afrojun.dev/instant-copy-url/).
 
+## Open links in the right profile
+
+Link routing opens new tabs in the profile you choose for each site. Chrome
+stays your default browser and ProfileBar never becomes one. A link from
+another app or a link that a page opens in a new tab moves to its profile in
+about a tenth of a second.
+
+To set it up:
+
+1. Add ProfileBar for Chrome to each profile that should route links or receive them.
+2. Open the extension's options page and choose **Identify profiles** once.
+   Each profile briefly opens a tab so the extension learns which profile it runs in.
+3. Add rules in the options page or on the **Links** tab of ProfileBar **Settings…**.
+   Both edit the same rules. You can also right-click a page and choose
+   **Always open this site in**.
+
+A rule matches a site and its subdomains, optionally under a path such as
+`github.com/team`, or any URL that contains some text. Site rules win over
+"URL contains" rules, and longer sites, paths, and text win over shorter ones.
+To check a rule, paste a link into **Test a link** in either editor. It names the
+profile the link opens in and the rule that sends it there.
+
+Links that match no rule stay where Chrome opens them. To send links from other
+apps that match no rule to one profile, as Finicky's default browser does,
+choose it under **Open other links from apps in**. Links that pages open never
+use it.
+
+Link routing never moves:
+
+- Navigation inside an existing tab, popup windows such as sign-in windows, or
+  sign-in sites such as `accounts.google.com`.
+- Tabs that Chrome opens in its first 3 seconds, so restored tabs stay put. A
+  link that starts Chrome opens in the last profile you used.
+
+Clear **Other apps** or **Web pages** under **Route links from** to stop routing
+from that source. Clear both to turn link routing off.
+
 ## Use it
 
 Each avatar in the menu bar belongs to one Chrome profile. Click the one you want and ProfileBar will switch to it or open it as needed.
 
-Open **Settings…** from the ProfileBar button to:
+Open **Settings…** from the ProfileBar button. It has three tabs:
 
-- Set a global keyboard shortcut for each profile.
-- Choose which profile avatars stay in the menu bar.
-- Start ProfileBar automatically when you sign in.
-- Find ProfileBar for Chrome and a guide to moving tabs between profiles.
+- **Profiles**: set a global keyboard shortcut for each profile and choose which avatars stay in the menu bar.
+- **Links**: edit the link-routing rules and find ProfileBar for Chrome.
+- **General**: start ProfileBar automatically when you sign in and check Accessibility access.
 
 <p align="center">
   <img src="docs/images/settings.png" width="720" alt="ProfileBar settings with Personal, Work, and Side project profiles">
@@ -88,7 +124,9 @@ extension menu; when it cannot identify one uniquely, the extension shows every
 profile. For an explicit tab or group move, the helper receives the selected
 URLs and profile directory from the extension and passes them to Chrome. Group
 moves also carry the visible group details through a temporary local relay when
-the destination extension can receive them. ProfileBar does not store the URLs
+the destination extension can receive them. For link routing, the helper
+receives a new tab's URL when a rule, or the profile you chose for other links
+from apps, sends it to another profile. ProfileBar does not store the URLs
 or send profile data to a server. Ordinary profile switching never uses the
 current page URL. ProfileBar does not bypass macOS permission controls.
 

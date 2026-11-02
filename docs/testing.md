@@ -44,4 +44,16 @@ cannot create the group, the source group must stay open. The group items should
 
 If two profiles share a name, the extension's setup page should show a **Rename** button for each. A button should open `chrome://settings/manageProfile` in that profile when the extension is installed there, and otherwise explain how to rename it by hand.
 
+For link routing, load the development extension in at least two profiles, choose **Identify profiles**, and use ProfileBar Dev's own rules file (`~/Library/Application Support/ProfileBar Dev/link-routing.json`) with throwaway sites such as `example.com`. Then check that:
+
+- A link from another app (`open -a "Google Chrome" <url>`) that a rule assigns elsewhere opens in that profile, and the source tab closes.
+- Links that a page opens in new tabs move the same way. Popup windows, navigation inside a tab, and links that match no rule stay put.
+- A tab that ProfileBar opens in a profile, whether routed, moved, or part of a moved group, loads once and is never routed again.
+- With a profile chosen under **Open other links from apps in**, a link from another app that matches no rule opens there, while a link that a page opens with no matching rule stays put.
+- Clearing **Other apps** or **Web pages** stops routing from that source, and edits in Settings and on the options page reach every profile.
+- **Always open this site in** saves a rule and moves the page.
+- **Test a link** names the same profile and rule in Settings and on the options page.
+
+Never test Chrome restarts or session restore while anything can route or open URLs. Sending URLs to a profile before Chrome has restored it makes Chrome skip that profile's session restore.
+
 For a release, also check **Start at login**, the update-check action, the drag-to-Applications DMG, and the installed app's signature and Accessibility trust. The signing, notarization, and publication steps live in [development and releases](development.md).

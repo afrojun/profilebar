@@ -88,8 +88,63 @@
           · <a href="https://github.com/afrojun/profilebar/issues/new/choose">Help &amp; feedback</a>
         </p>
       </section>
+
+      <section class="routing" id="routing" aria-labelledby="routing-heading" hidden>
+        <h2 id="routing-heading">Link routing</h2>
+        <p class="routing-intro">
+          Open links in the profile that a rule names. The rules apply in every profile that has ProfileBar for Chrome.
+        </p>
+        <p class="routing-status" id="routing-status" role="status"></p>
+        <div class="routing-identity" id="routing-identity" hidden>
+          <p id="routing-identity-message"></p>
+          <button class="button-secondary" id="identify" type="button">Identify profiles</button>
+          <p id="identify-result" role="status"></p>
+        </div>
+
+        <div id="routing-controls" hidden>
+          <fieldset class="route-from">
+            <legend>Route links from</legend>
+            <label><input id="route-other-apps" type="checkbox" /> Other apps</label>
+            <label><input id="route-web-pages" type="checkbox" /> Web pages</label>
+          </fieldset>
+          <label class="fallback">
+            Open other links from apps in
+            <select id="fallback-profile"></select>
+          </label>
+
+          <table class="rules">
+            <thead>
+              <tr>
+                <th scope="col">Match</th>
+                <th scope="col">Site or text</th>
+                <th scope="col">Profile</th>
+                <th scope="col"><span class="visually-hidden">Remove</span></th>
+              </tr>
+            </thead>
+            <tbody id="rule-rows"></tbody>
+          </table>
+          <p class="routing-note" id="no-rules">
+            No rules yet. Right-click a page and choose <strong>Always open this site in</strong>, or add a rule here.
+          </p>
+          <div class="actions">
+            <button class="button-secondary" id="add-rule" type="button">Add rule</button>
+            <p class="routing-result" id="routing-result" role="status"></p>
+          </div>
+          <label class="link-test">
+            Test a link
+            <input id="link-test" type="url" spellcheck="false" placeholder="https://example.com/page" />
+          </label>
+          <p class="routing-note" id="link-test-result" role="status"></p>
+          <p class="routing-note">
+            A site rule matches the site and its subdomains, such as <code>github.com</code> or
+            <code>github.com/team</code>. The most specific matching rule wins.
+            <a href="https://afrojun.dev/profilebar/#link-routing">How rules work</a>
+          </p>
+        </div>
+      </section>
     </main>
 
+    <script src="routing-rules.js"></script>
     <script src="setup.js"></script>
   </body>
 </html>

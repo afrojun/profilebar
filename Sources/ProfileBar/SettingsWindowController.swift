@@ -28,6 +28,7 @@ struct SettingsSnapshot {
     let profileError: String?
     let launchAtLogin: LaunchAtLoginStatus
     let hasAccessibilityAccess: Bool
+    let linkRouting: Result<LinkRoutingSettings, Error>
 }
 
 struct SettingsActions {
@@ -36,34 +37,33 @@ struct SettingsActions {
     let setProfileVisible: (ChromeProfile, Bool) -> Void
     let setLaunchAtLogin: (Bool) -> String?
     let openAccessibilitySettings: () -> Void
+    let saveLinkRouting: (LinkRoutingSettings) throws -> Void
 }
 
 @MainActor
 final class SettingsWindowController: NSWindowController {
     private static let websiteURL = URL(string: "https://afrojun.dev/profilebar/")!
     private static let moveTabsGuideURL = URL(string: "https://afrojun.dev/profilebar/#move-tabs")!
+    private static let linkRoutingGuideURL = URL(string: "https://afrojun.dev/profilebar/#link-routing")!
     private static let extensionURL = URL(
         string: "https://chromewebstore.google.com/detail/\(NativeHostRegistration.storeExtensionID)")!
     private static let repositoryURL = URL(string: "https://github.com/afrojun/profilebar")!
     private static let helpURL = repositoryURL.appending(path: "issues/new/choose")
 
     private let actions: SettingsActions
+    private let pages = SettingsTabViewController()
     private var launchDetail: NSTextField?
 
     init(actions: SettingsActions) {
         self.actions = actions
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 540, height: 380),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = Self.appName
+        let window = NSWindow(contentViewController: pages)
+        window.styleMask = [.titled, .closable]
+        window.toolbarStyle = .preference
+        window.title = "\(Self.appName) Settings"
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 500, height: 320)
         super.init(window: window)
-        window.center()
         refresh()
+        window.center()
     }
 
     @available(*, unavailable)
@@ -80,82 +80,35 @@ final class SettingsWindowController: NSWindowController {
 
     func refresh() {
         let snapshot = actions.snapshot()
-        window?.contentView = makeContentView(snapshot)
-        let height = max(480, 350 + 50 * snapshot.profiles.count)
-        window?.setContentSize(NSSize(width: 540, height: height))
+        pages.show([
+            SettingsPage(title: "Profiles", symbolName: "person.crop.circle", view: makeProfilesPage(snapshot)),
+            SettingsPage(title: "Links", symbolName: "link", view: makeLinksPage(snapshot)),
+            SettingsPage(title: "General", symbolName: "gearshape", view: makeGeneralPage(snapshot)),
+        ])
     }
 
-    private func makeContentView(_ snapshot: SettingsSnapshot) -> NSView {
-        let content = NSView()
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 14
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(stack)
-
-        let intro = NSTextField(
-            wrappingLabelWithString: "Choose which profiles appear in the menu bar and set a shortcut for each one.")
-        intro.textColor = .secondaryLabelColor
-        stack.addArrangedSubview(intro)
-        intro.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-
-        stack.addArrangedSubview(Self.heading("Profiles"))
-        if snapshot.profiles.isEmpty {
+    private func makeProfilesPage(_ snapshot: SettingsSnapshot) -> NSView {
+        let intro = Self.detail("Choose which profiles appear in the menu bar and set a shortcut for each one.")
+        guard !snapshot.profiles.isEmpty else {
             let empty = NSTextField(labelWithString: snapshot.profileError ?? "No Chrome profiles were found.")
             empty.textColor = snapshot.profileError == nil ? .secondaryLabelColor : .systemRed
-            stack.addArrangedSubview(empty)
-        } else {
-            for item in snapshot.profiles {
-                let row = ProfileSettingsRow(
-                    item: item,
-                    setShortcut: actions.setShortcut,
-                    setVisible: actions.setProfileVisible
-                )
-                stack.addArrangedSubview(row)
-                row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-            }
+            return Self.page([intro, empty])
         }
+        let rows = snapshot.profiles.map { item in
+            ProfileSettingsRow(item: item, setShortcut: actions.setShortcut, setVisible: actions.setProfileVisible)
+        }
+        return Self.page([intro] + rows)
+    }
 
-        let separator = NSBox()
-        separator.boxType = .separator
-        stack.addArrangedSubview(separator)
-        separator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    private func makeLinksPage(_ snapshot: SettingsSnapshot) -> NSView {
+        Self.page([makeLinkRoutingSection(snapshot), Self.separator(), makeExtensionSection()])
+    }
 
-        stack.addArrangedSubview(Self.heading("General"))
-        let launch = makeLaunchRow(snapshot.launchAtLogin)
-        stack.addArrangedSubview(launch)
-        launch.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-
-        let access = makeAccessibilityRow(snapshot.hasAccessibilityAccess)
-        stack.addArrangedSubview(access)
-        access.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-
-        let moveTabsSeparator = NSBox()
-        moveTabsSeparator.boxType = .separator
-        stack.addArrangedSubview(moveTabsSeparator)
-        moveTabsSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-
-        let moveTabs = makeMoveTabsSection()
-        stack.addArrangedSubview(moveTabs)
-        moveTabs.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-
-        let footerSeparator = NSBox()
-        footerSeparator.boxType = .separator
-        stack.addArrangedSubview(footerSeparator)
-        footerSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-
-        let footer = makeFooter()
-        stack.addArrangedSubview(footer)
-        footer.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 22),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -22),
+    private func makeGeneralPage(_ snapshot: SettingsSnapshot) -> NSView {
+        Self.page([
+            makeLaunchRow(snapshot.launchAtLogin), makeAccessibilityRow(snapshot.hasAccessibilityAccess),
+            Self.separator(), makeFooter(),
         ])
-        return content
     }
 
     private func makeLaunchRow(_ status: LaunchAtLoginStatus) -> NSView {
@@ -185,19 +138,41 @@ final class SettingsWindowController: NSWindowController {
         return Self.settingRow(title: "Accessibility", detail: detail, controls: [check, open])
     }
 
-    private func makeMoveTabsSection() -> NSView {
+    private func makeExtensionSection() -> NSView {
         let description = Self.detail(
-            "Move tabs and tab groups to another Chrome profile from the ProfileBar for Chrome right-click menu.")
+            "ProfileBar for Chrome routes links with these rules and moves tabs and tab groups between profiles from "
+                + "its right-click menu.")
         let extensionLink = linkButton("Get ProfileBar for Chrome", action: #selector(openExtensionStore))
-        let guideLink = linkButton("How it works", action: #selector(openMoveTabsGuide))
-        let links = NSStackView(views: [extensionLink, guideLink])
+        let rulesGuideLink = linkButton("How rules work", action: #selector(openLinkRoutingGuide))
+        let moveTabsGuideLink = linkButton("How moving tabs works", action: #selector(openMoveTabsGuide))
+        let links = NSStackView(views: [extensionLink, rulesGuideLink, moveTabsGuideLink])
         links.orientation = .horizontal
         links.spacing = 16
 
-        let section = NSStackView(views: [Self.heading("Move tabs between profiles"), description, links])
+        let section = NSStackView(views: [Self.heading("ProfileBar for Chrome"), description, links])
         section.orientation = .vertical
         section.alignment = .leading
         section.spacing = 6
+        return section
+    }
+
+    private func makeLinkRoutingSection(_ snapshot: SettingsSnapshot) -> NSView {
+        let description = Self.detail("Open new tabs in the profile that a rule names for their site.")
+        let section = NSStackView(views: [Self.heading("Link routing"), description])
+        section.orientation = .vertical
+        section.alignment = .leading
+        section.spacing = 6
+        switch snapshot.linkRouting {
+        case .success(let settings):
+            let editor = LinkRoutingSettingsView(
+                settings: settings, profiles: snapshot.profiles.map(\.profile), save: actions.saveLinkRouting)
+            section.addArrangedSubview(editor)
+            editor.widthAnchor.constraint(equalTo: section.widthAnchor).isActive = true
+        case .failure(let error):
+            let message = Self.detail(LinkRoutingStore.unreadableMessage(for: error))
+            message.textColor = .systemRed
+            section.addArrangedSubview(message)
+        }
         return section
     }
 
@@ -257,6 +232,10 @@ final class SettingsWindowController: NSWindowController {
         NSWorkspace.shared.open(Self.moveTabsGuideURL)
     }
 
+    @objc private func openLinkRoutingGuide() {
+        NSWorkspace.shared.open(Self.linkRoutingGuideURL)
+    }
+
     @objc private func openRepository() {
         NSWorkspace.shared.open(Self.repositoryURL)
     }
@@ -265,6 +244,34 @@ final class SettingsWindowController: NSWindowController {
         let label = NSTextField(labelWithString: title)
         label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
         return label
+    }
+
+    /// Lays out one settings tab as a padded column whose views span its width.
+    private static func page(_ views: [NSView]) -> NSView {
+        let stack = NSStackView(views: views)
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        for view in views {
+            view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
+        let page = NSView()
+        page.addSubview(stack)
+        NSLayoutConstraint.activate([
+            page.widthAnchor.constraint(equalToConstant: 540),
+            stack.leadingAnchor.constraint(equalTo: page.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: page.trailingAnchor, constant: -24),
+            stack.topAnchor.constraint(equalTo: page.topAnchor, constant: 22),
+            stack.bottomAnchor.constraint(equalTo: page.bottomAnchor, constant: -22),
+        ])
+        return page
+    }
+
+    private static func separator() -> NSView {
+        let separator = NSBox()
+        separator.boxType = .separator
+        return separator
     }
 
     private static func detail(_ text: String) -> NSTextField {
@@ -308,6 +315,61 @@ final class SettingsWindowController: NSWindowController {
         row.alignment = .centerY
         row.spacing = 12
         return row
+    }
+}
+
+private struct SettingsPage {
+    let title: String
+    let symbolName: String
+    let view: NSView
+}
+
+/// Shows each settings page as a toolbar tab and sizes the window to fit the selected page.
+@MainActor
+private final class SettingsTabViewController: NSTabViewController {
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        tabStyle = .toolbar
+        canPropagateSelectedChildViewControllerTitle = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// Replaces the page contents, keeping the selected tab.
+    func show(_ pages: [SettingsPage]) {
+        if tabViewItems.isEmpty {
+            for page in pages {
+                let controller = SettingsPageController()
+                controller.title = page.title
+                let item = NSTabViewItem(viewController: controller)
+                item.label = page.title
+                item.image = NSImage(systemSymbolName: page.symbolName, accessibilityDescription: page.title)
+                addTabViewItem(item)
+            }
+        }
+        for (item, page) in zip(tabViewItems, pages) {
+            (item.viewController as? SettingsPageController)?.show(page.view)
+        }
+    }
+}
+
+/// Keeps one container view per tab so a refresh swaps the page inside it instead of the tab's own view.
+@MainActor
+private final class SettingsPageController: NSViewController {
+    override func loadView() {
+        view = NSView()
+    }
+
+    func show(_ page: NSView) {
+        for old in view.subviews { old.removeFromSuperview() }
+        page.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(page)
+        NSLayoutConstraint.activate([
+            page.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            page.topAnchor.constraint(equalTo: view.topAnchor),
+        ])
+        preferredContentSize = page.fittingSize
     }
 }
 

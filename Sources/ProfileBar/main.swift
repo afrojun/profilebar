@@ -18,6 +18,7 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        NSApp.mainMenu = Self.keyboardMenu()
         do {
             try NativeHostRegistration.installForCurrentApp()
         } catch {
@@ -34,6 +35,26 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
         reloadProfiles(rebuild: true)
         fillUtilityMenu(menu)
         updateChecker.start()
+    }
+
+    /// A menu-bar app shows no main menu, but macOS still finds standard shortcuts such as ⌘V and ⌘W in it.
+    private static func keyboardMenu() -> NSMenu {
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+
+        let editItem = NSMenuItem()
+        editItem.submenu = edit
+        let menu = NSMenu()
+        menu.addItem(editItem)
+        return menu
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -186,7 +207,8 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
             },
             openAccessibilitySettings: { [unowned self] in
                 openAccessibilitySettings()
-            }
+            },
+            saveLinkRouting: { try LinkRoutingStore.save($0) }
         )
     }
 
@@ -202,7 +224,8 @@ final class ProfileBarAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelega
             profiles: profileSettings,
             profileError: profileError,
             launchAtLogin: launchAtLoginStatus,
-            hasAccessibilityAccess: AXIsProcessTrusted()
+            hasAccessibilityAccess: AXIsProcessTrusted(),
+            linkRouting: Result { try LinkRoutingStore.load() }
         )
     }
 

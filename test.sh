@@ -12,6 +12,11 @@ swiftc -warnings-as-errors \
   "$project_dir/Sources/NativeHost/ProfileBridge.swift" \
   "$project_dir/Sources/NativeHost/ChromeFocusedProfile.swift" \
   "$project_dir/Sources/NativeHost/GroupHandoff.swift" \
+  "$project_dir/Sources/NativeHost/HandoffRelay.swift" \
+  "$project_dir/Sources/NativeHost/LocalSocket.swift" \
+  "$project_dir/Sources/NativeHost/ProfileRelay.swift" \
+  "$project_dir/Sources/NativeHost/RoutingSession.swift" \
+  "$project_dir/Sources/ProfileBar/LinkRouting.swift" \
   "$project_dir/Sources/ProfileBar/ChromeWindowTitleMatcher.swift" \
   "$project_dir/Sources/ProfileBar/ProfileBarSymbol.swift" \
   "$project_dir/Sources/ProfileBar/ProfileShortcut.swift" \

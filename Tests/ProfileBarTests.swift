@@ -164,6 +164,8 @@ struct ProfileBarTests {
         var openedGroup: TabGroupDetails?
         var groupedResult = true
         var settingsProfile: ChromeProfile?
+        var savedLinkRouting: LinkRoutingSettings?
+        var identifiedCaller: String?
         let bridge = ProfileBridge(
             loadProfiles: { [workProfile] },
             focusedProfile: { _ in workProfile },
@@ -175,6 +177,11 @@ struct ProfileBarTests {
             openProfileSettings: { profile, _ in
                 settingsProfile = profile
                 return true
+            },
+            saveLinkRouting: { savedLinkRouting = try $0.validated() },
+            identifyProfiles: { _, extensionID in
+                identifiedCaller = extensionID
+                return ProfileIdentification.Result(identified: ["Profile 2"], unreachable: [])
             }
         )
         let listed = bridge.handle(["type": "listProfiles"])
@@ -281,7 +288,7 @@ struct ProfileBarTests {
                 extensionID: NativeHostRegistration.storeExtensionID),
             "a profile without native access should use the URL-only fallback")
 
-        let relay = try! GroupRelay(payload: ["urls": ["https://example.com/"], "group": ["title": "Research"]])
+        let relay = try! HandoffRelay(payload: ["urls": ["https://example.com/"], "group": ["title": "Research"]])
         let relayFinished = DispatchSemaphore(value: 0)
         let relayState = NSLock()
         var relayCompleted = false
@@ -295,9 +302,9 @@ struct ProfileBarTests {
                 relayState.unlock()
             } catch {}
         }
-        let claim = try! GroupRelay.request(token: relay.token, message: ["type": "claim"])
+        let claim = try! HandoffRelay.request(token: relay.token, message: ["type": "claim"])
         expect((claim["urls"] as? [String]) == ["https://example.com/"], "the receiver should get the pending URLs")
-        let completion = try! GroupRelay.request(token: relay.token, message: ["type": "complete", "ok": true])
+        let completion = try! HandoffRelay.request(token: relay.token, message: ["type": "complete", "ok": true])
         expect(completion["ok"] as? Bool == true, "the receiver should get a completion acknowledgement")
         expect(relayFinished.wait(timeout: .now() + 2) == .success, "the source should finish the handoff")
         relayState.lock()
@@ -305,12 +312,225 @@ struct ProfileBarTests {
         relayState.unlock()
         expect(didComplete, "the source should observe the receiver's claim and completion")
 
-        let expiredRelay = try! GroupRelay(payload: [:])
+        let expiredRelay = try! HandoffRelay(payload: [:])
         expect(try! !expiredRelay.awaitClaim(seconds: 0), "an absent receiver should allow a URL-only fallback")
         expiredRelay.closeListening()
         expect(
-            (try? GroupRelay.request(token: expiredRelay.token, message: ["type": "claim"])) == nil,
+            (try? HandoffRelay.request(token: expiredRelay.token, message: ["type": "claim"])) == nil,
             "a receiver arriving after fallback must not claim the group")
+
+        func hostRule(_ host: String, path: String? = nil, profile: String = "Profile 2") -> LinkRule {
+            LinkRule(id: "rule-1", kind: .host, host: host, pathPrefix: path, text: nil, profileDirectory: profile)
+        }
+        func containsRule(_ text: String) -> LinkRule {
+            LinkRule(id: "rule-2", kind: .contains, host: nil, pathPrefix: nil, text: text, profileDirectory: "Default")
+        }
+        func routingError(_ rules: [LinkRule], version: Int = 1) -> LinkRoutingError? {
+            do {
+                _ = try LinkRoutingSettings(version: version, rules: rules).validated()
+                return nil
+            } catch {
+                return error as? LinkRoutingError
+            }
+        }
+        let normalizedRule = try! LinkRoutingSettings(rules: [hostRule("GitHub.com.", path: "/team")]).validated()
+            .rules[0]
+        expect(
+            normalizedRule.host == "github.com" && normalizedRule.pathPrefix == "/team" && normalizedRule.text == nil,
+            "a host rule should be stored lowercased without a trailing dot")
+        expect(
+            routingError([hostRule("google.com"), containsRule("docs.google.com/a/example.com")]) == nil,
+            "a parent of a sign-in host and ordinary contains text should be accepted")
+        expect(
+            routingError([hostRule("example.com"), containsRule("example*")])
+                == LinkRoutingError(.invalidText, ruleIndex: 1),
+            "contains text with a request-filter pattern should be rejected with its rule position")
+        expect(
+            routingError([hostRule("accounts.google.com")])?.reason == .signInHost
+                && routingError([hostRule("acme.okta.com")])?.reason == .signInHost
+                && routingError([containsRule("login.microsoftonline.com/")])?.reason == .signInHost,
+            "rules for sign-in hosts should be rejected")
+        expect(routingError([hostRule("exa mple.com")])?.reason == .invalidHost, "an invalid host should be rejected")
+        expect(
+            routingError([containsRule("café")])?.reason == .invalidText,
+            "contains text must be ASCII because Chrome's request filters reject other characters")
+        expect(
+            routingError([hostRule("github.com", path: "acme")])?.reason == .invalidPath,
+            "a path prefix must start with a slash")
+        expect(
+            routingError([hostRule("github.com", path: "/" + String(repeating: "a", count: 256))])?.reason
+                == .invalidPath,
+            "a path prefix must stay short enough for Chrome to compile its pattern")
+        expect(
+            routingError([hostRule("example.com", profile: "../Default")])?.reason == .invalidProfile,
+            "a rule must name a valid profile directory")
+        expect(
+            routingError(Array(repeating: hostRule("example.com"), count: 501))?.reason == .tooManyRules,
+            "the rule count should be limited")
+        expect(
+            (try? LinkRoutingSettings(rules: [], fallbackProfileDirectory: "../Default").validated()) == nil
+                && (try? LinkRoutingSettings(rules: [], fallbackProfileDirectory: "Profile 2").validated()) != nil,
+            "the fallback for unmatched links must be a valid profile directory")
+        struct RoutingCases: Decodable {
+            struct Group: Decodable {
+                struct Case: Decodable {
+                    let url: String
+                    let rule: String?
+                }
+                let name: String
+                let rules: [LinkRule]
+                let cases: [Case]
+            }
+            let groups: [Group]
+        }
+        let casesURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../extension/test/routing-cases.json")
+        let routingCases = try! JSONDecoder().decode(RoutingCases.self, from: Data(contentsOf: casesURL))
+        for group in routingCases.groups {
+            let settings = LinkRoutingSettings(rules: group.rules)
+            for item in group.cases {
+                expect(
+                    settings.winningRule(for: item.url)?.id == item.rule,
+                    "\(group.name): \(item.url) should match \(item.rule ?? "no rule"), as in the extension")
+            }
+        }
+        expect(
+            routingError([], version: 2)?.reason == .unsupportedVersion,
+            "settings from a newer ProfileBar should not be changed")
+
+        let routingFolder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("profilebar-tests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: routingFolder) }
+        let routingFile = routingFolder.appendingPathComponent("link-routing.json")
+        expect(try! LinkRoutingStore.load(from: routingFile) == LinkRoutingSettings(), "no file means no rules")
+        try! LinkRoutingStore.save(LinkRoutingSettings(rules: [hostRule("Example.com")]), to: routingFile)
+        expect(
+            try! LinkRoutingStore.load(from: routingFile).rules.map(\.host) == ["example.com"],
+            "saved rules should load in their validated form")
+        expect(
+            (try? LinkRoutingStore.save(LinkRoutingSettings(rules: [hostRule("bad host")]), to: routingFile)) == nil
+                && (try! LinkRoutingStore.load(from: routingFile)).rules.count == 1,
+            "an invalid save must leave the saved rules unchanged")
+
+        let validSave = bridge.handle([
+            "type": "saveLinkRouting",
+            "settings": try! LinkRoutingSettings(rules: [hostRule("example.com")]).jsonObject(),
+        ])
+        expect(
+            validSave["ok"] as? Bool == true && savedLinkRouting?.rules.count == 1,
+            "the helper should save valid rules")
+        let rejectedSave = bridge.handle([
+            "type": "saveLinkRouting",
+            "settings": try! LinkRoutingSettings(rules: [hostRule("accounts.google.com")]).jsonObject(),
+        ])
+        expect(
+            rejectedSave["error"] as? String == "sign_in_host" && rejectedSave["ruleIndex"] as? Int == 0
+                && (rejectedSave["message"] as? String)?.isEmpty == false,
+            "a rejected rule should be reported with its position and a message")
+        expect(
+            bridge.handle(["type": "saveLinkRouting", "settings": ["rules": "none"]])["error"] as? String
+                == "invalid_request",
+            "malformed settings should be rejected")
+        expect(
+            bridge.handle(["type": "identifyProfiles"])["error"] as? String == "invalid_request",
+            "a caller without an extension origin cannot identify profiles")
+        let identified = bridge.handle(
+            ["type": "identifyProfiles"], callerExtensionID: NativeHostRegistration.storeExtensionID)
+        expect(
+            (identified["identified"] as? [String]) == ["Profile 2"]
+                && identifiedCaller == NativeHostRegistration.storeExtensionID,
+            "identification should run for the calling extension")
+
+        // Unusual directory names keep these sockets apart from any running helper.
+        let relayDirectory = "Profile 9001"
+        let replacedListener = try! ProfileRelayListener(profileDirectory: relayDirectory) { _ in ["ok": false] }
+        let currentListener = try! ProfileRelayListener(profileDirectory: relayDirectory) { request in
+            ["ok": (request["urls"] as? [String]) == ["https://example.com/"]]
+        }
+        replacedListener.close()
+        expect(
+            ProfileRelay.requestOpen([URL(string: "https://example.com/")!], inProfileDirectory: relayDirectory)
+                == .opened,
+            "the newest helper for a profile should keep receiving its tabs after an older one exits")
+        currentListener.close()
+        expect(
+            ProfileRelay.requestOpen([URL(string: "https://example.com/")!], inProfileDirectory: relayDirectory)
+                == .declined,
+            "a profile with no helper listening can open the tabs another way")
+        for (reply, expected) in [
+            (["ok": false, "started": false], ProfileRelay.Delivery.declined),
+            (["ok": false, "started": true], .uncertain), (["ok": false], .uncertain),
+        ] {
+            let listener = try! ProfileRelayListener(profileDirectory: relayDirectory) { _ in reply }
+            expect(
+                ProfileRelay.requestOpen([URL(string: "https://example.com/")!], inProfileDirectory: relayDirectory)
+                    == expected,
+                "a failed arrival that may have opened tabs must not be opened again: \(reply)")
+            listener.close()
+        }
+        expect(
+            !ProfileRelay.isListening(profileDirectory: relayDirectory), "a closed helper should stop receiving tabs")
+
+        let sessionLock = NSLock()
+        var sessionMessages: [[String: Any]] = []
+        let sessionMessage = DispatchSemaphore(value: 0)
+        func nextSessionMessage() -> [String: Any]? {
+            guard sessionMessage.wait(timeout: .now() + 3) == .success else { return nil }
+            return sessionLock.withLock { sessionMessages.removeFirst() }
+        }
+        let session = RoutingSession(settingsURL: routingFile) { message in
+            sessionLock.withLock { sessionMessages.append(message) }
+            sessionMessage.signal()
+        }
+        session.handle(["type": "hello", "profileDirectory": "Profile 9002"])
+        let helloSettings = nextSessionMessage()
+        expect(
+            helloSettings?["type"] as? String == "settings"
+                && ((helloSettings?["settings"] as? [String: Any])?["rules"] as? [Any])?.count == 1,
+            "a connected extension copy should receive the shared rules")
+
+        let peerResult = NSLock()
+        var peerOpened = false
+        let peerFinished = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            let opened =
+                ProfileRelay.requestOpen(
+                    [URL(string: "https://example.com/arrival")!], inProfileDirectory: "Profile 9002") == .opened
+            peerResult.withLock { peerOpened = opened }
+            peerFinished.signal()
+        }
+        let arrival = nextSessionMessage()
+        expect(
+            arrival?["type"] as? String == "open" && (arrival?["urls"] as? [String]) == ["https://example.com/arrival"],
+            "another helper's tabs should be opened by this profile's extension copy")
+        session.handle(["type": "opened", "requestId": arrival?["requestId"] ?? "", "ok": true, "started": true])
+        expect(
+            peerFinished.wait(timeout: .now() + 3) == .success && peerResult.withLock { peerOpened },
+            "the routing helper should learn that the destination opened the tab")
+
+        let destinationRequests = NSLock()
+        var destinationURLs: [String] = []
+        let destination = try! ProfileRelayListener(profileDirectory: "Profile 9003") { request in
+            destinationRequests.withLock { destinationURLs += request["urls"] as? [String] ?? [] }
+            return ["ok": true]
+        }
+        session.handle([
+            "type": "route", "requestId": 7, "url": "https://example.com/routed", "profileDirectory": "Profile 9003",
+        ])
+        let routed = nextSessionMessage()
+        expect(
+            routed?["type"] as? String == "routed" && routed?["requestId"] as? Int == 7
+                && routed?["ok"] as? Bool == true
+                && destinationRequests.withLock({ destinationURLs }) == ["https://example.com/routed"],
+            "a routed URL should reach a connected destination through its helper")
+        destination.close()
+
+        try! LinkRoutingStore.save(LinkRoutingSettings(rules: []), to: routingFile)
+        let changedSettings = nextSessionMessage()
+        expect(
+            ((changedSettings?["settings"] as? [String: Any])?["rules"] as? [Any])?.isEmpty == true,
+            "a saved rule change should reach connected extension copies")
+        session.stop()
 
         let manifest = try! NativeHostRegistration.manifest(
             hostName: NativeHostRegistration.productionHostName,

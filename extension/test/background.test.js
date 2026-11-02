@@ -4,11 +4,29 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const source = fs.readFileSync(path.join(__dirname, "..", "background.js"), "utf8");
+const extensionRoot = path.join(__dirname, "..");
+const source = fs.readFileSync(path.join(extensionRoot, "background.js"), "utf8");
 const extensionID = "abcdefghijklmnopabcdefghijklmnop";
+const STARTUP_MS = 3000;
 
-function menuHarness({ installedFromStore = true, hostResponse = { ok: true, profiles: [] }, tabContext = true, os = "mac", focused = true } = {}) {
-  const listeners = {};
+function menuHarness({
+  installedFromStore = true, hostResponse = { ok: true, profiles: [] }, tabContext = true, os = "mac", focused = true,
+  profileDirectory = null, settleStartup = true, leftoverRules = [], focusError = null, noWindow = false,
+} = {}) {
+  const listeners = { messageHandlers: [] };
+  listeners.message = (message, sender, sendResponse) => listeners.messageHandlers
+    .map((handler) => handler(message, sender, sendResponse)).some(Boolean);
+  const clock = { now: 1_000_000, timers: [] };
+  const ports = [];
+  const ruleUpdates = [];
+  const reloadedTabs = [];
+  const windowUpdates = [];
+  const tabUpdates = [];
+  const windowTypes = new Map();
+  let beforeWindowCheck = null;
+  const storage = { profileDirectory };
+  let nextTabId = 500;
+  let nextUUID = 1;
   const menus = [];
   const nativeMessages = [];
   const openedTabs = [];
@@ -28,7 +46,18 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
       getManifest() { return installedFromStore ? { update_url: "https://clients2.google.com/service/update2/crx" } : {}; },
       onInstalled: { addListener(listener) { listeners.installed = listener; } },
       onStartup: { addListener(listener) { listeners.startup = listener; } },
-      onMessage: { addListener(listener) { listeners.message = listener; } },
+      onMessage: { addListener(listener) { listeners.messageHandlers.push(listener); } },
+      connectNative(host) {
+        const port = {
+          host, messages: [], disconnected: false,
+          onMessage: { addListener(listener) { port.receive = listener; } },
+          onDisconnect: { addListener(listener) { port.drop = listener; } },
+          postMessage(message) { port.messages.push(JSON.parse(JSON.stringify(message))); },
+          disconnect() { port.disconnected = true; },
+        };
+        ports.push(port);
+        return port;
+      },
       async openOptionsPage() { optionsOpened += 1; },
       getURL(file) { return `chrome-extension://${extensionID}/${file}`; },
       async getPlatformInfo() { return { os }; },
@@ -43,7 +72,18 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
       WINDOW_ID_NONE: -1,
       WINDOW_ID_CURRENT: -2,
       onFocusChanged: { addListener(listener) { listeners.focusChanged = listener; } },
-      async getLastFocused() { return { focused: windowFocused }; },
+      async getLastFocused() {
+        if (noWindow) throw new Error("No window");
+        return { id: 1, focused: windowFocused, state: "normal" };
+      },
+      async get(id) {
+        beforeWindowCheck?.();
+        return { id, type: windowTypes.get(id) ?? "normal" };
+      },
+      async update(id, properties) {
+        if (focusError) throw focusError;
+        windowUpdates.push({ id, ...properties });
+      },
     },
     contextMenus: {
       ContextType: tabContext ? { TAB: "tab" } : {},
@@ -56,9 +96,21 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
       },
     },
     tabs: {
+      TAB_ID_NONE: -1,
       onAttached: { addListener(listener) { listeners.tabAttached = listener; } },
       onDetached: { addListener(listener) { listeners.tabDetached = listener; } },
-      async create(tab) { openedTabs.push(tab); },
+      onCreated: { addListener(listener) { listeners.tabCreated = listener; } },
+      onUpdated: { addListener(listener) { listeners.tabUpdated = listener; } },
+      onRemoved: { addListener(listener) { listeners.tabRemoved = listener; } },
+      async create(tab) {
+        openedTabs.push(tab);
+        const created = { id: nextTabId++, windowId: tab.windowId ?? 1, pendingUrl: tab.url };
+        tabs.set(created.id, created);
+        listeners.tabCreated?.(created);
+        return created;
+      },
+      async reload(id) { reloadedTabs.push(id); },
+      async update(id, properties) { tabUpdates.push({ id, ...properties }); },
       async query({ active, highlighted, groupId, windowId }) {
         return [...tabs.values()].filter((tab) => (!active || tab.active) && (!highlighted || tab.highlighted)
           && (groupId === undefined || tab.groupId === groupId)
@@ -89,12 +141,60 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
       },
     },
   };
+  chrome.storage = { local: {
+    async get(key) { return { [key]: storage[key] }; },
+    async set(values) { Object.assign(storage, values); },
+  } };
+  chrome.webNavigation = {
+    onCreatedNavigationTarget: { addListener(listener) { listeners.navigationTarget = listener; } },
+    onErrorOccurred: { addListener(listener) { listeners.navigationError = listener; } },
+    onCommitted: { addListener(listener) { listeners.navigationCommitted = listener; } },
+  };
+  let sessionRules = leftoverRules;
+  let ruleUpdateError = null;
+  chrome.declarativeNetRequest = {
+    async getSessionRules() { return sessionRules; },
+    async updateSessionRules(update) {
+      if (ruleUpdateError) throw ruleUpdateError;
+      const kept = sessionRules.filter(({ id }) => !update.removeRuleIds.includes(id));
+      if (update.addRules.some((rule) => kept.some(({ id }) => id === rule.id))) {
+        throw new Error(`Rule with id ${update.addRules[0].id} does not have a unique ID.`);
+      }
+      sessionRules = [...kept, ...update.addRules];
+      ruleUpdates.push(JSON.parse(JSON.stringify(update)));
+    },
+  };
+  function advance(ms) {
+    clock.now += ms;
+    for (;;) {
+      const due = clock.timers.filter((timer) => timer.at <= clock.now).sort((a, b) => a.at - b.at)[0];
+      if (!due) break;
+      clock.timers.splice(clock.timers.indexOf(due), 1);
+      due.callback();
+    }
+  }
   const context = vm.createContext({
-    chrome, TextEncoder,
+    chrome, TextEncoder, URL,
     console: { debug() {}, error(...args) { errors.push(args); } },
+    Date: { now: () => clock.now },
+    setTimeout(callback, ms) { clock.timers.push({ at: clock.now + ms, callback }); },
+    crypto: { randomUUID: () => `rule-${nextUUID++}` },
+    importScripts(...files) {
+      for (const file of files) vm.runInContext(fs.readFileSync(path.join(extensionRoot, file), "utf8"), context);
+    },
   });
   vm.runInContext(source, context);
+  if (settleStartup) advance(STARTUP_MS);
   return {
+    ports,
+    ruleUpdates,
+    reloadedTabs,
+    windowUpdates,
+    tabUpdates,
+    storage,
+    advance,
+    setWindowType(id, type) { windowTypes.set(id, type); },
+    onWindowCheck(callback) { beforeWindowCheck = callback; },
     listeners,
     menus,
     nativeMessages,
@@ -110,6 +210,7 @@ function menuHarness({ installedFromStore = true, hostResponse = { ok: true, pro
     setCloseError(error) { closeError = error; },
     setOpenGate(gate) { openGate = gate; },
     setTab(tab) { tabs.set(tab.id, tab); },
+    failRuleUpdates(error) { ruleUpdateError = error; },
     setGroup(group) { groups.set(group.id, group); },
     deleteGroup(id) { groups.delete(id); },
     setGroupResponse(response) { groupResponse = response; },
@@ -249,7 +350,10 @@ test("the setup page check refreshes the menu and reports the connection", async
   assert.equal(harness.listeners.message({ type: "check-profilebar" }, {}, (value) => { response = value; }), true);
   await new Promise(setImmediate);
 
-  assert.deepEqual(JSON.parse(JSON.stringify(response)), { state: "ready", destinationCount: 2, sharedNameProfiles: [] });
+  assert.deepEqual(JSON.parse(JSON.stringify(response)), {
+    state: "ready", destinationCount: 2, sharedNameProfiles: [],
+    profiles: [{ directory: "Default", title: "Personal" }, { directory: "Profile 2", title: "Work" }],
+  });
   assert.ok(harness.menus.some((item) => item.id === "profile:Default"));
   assert.equal(harness.listeners.message({ type: "other" }, {}, () => {}), false);
 });
@@ -495,4 +599,303 @@ test("an unpacked build talks to the ProfileBar Dev helper", async () => {
   const harness = menuHarness({ installedFromStore: false });
   await harness.refresh();
   assert.equal(harness.nativeMessages[0].host, "dev.afrojun.profilebar.dev");
+});
+
+const flush = () => new Promise(setImmediate);
+const plain = (value) => JSON.parse(JSON.stringify(value));
+const workRules = {
+  version: 1,
+  routeFrom: { otherApps: true, webPages: true },
+  rules: [
+    { id: "a", kind: "host", host: "jira.example.com", pathPrefix: "", profileDirectory: "Profile 2" },
+    { id: "b", kind: "host", host: "example.com", pathPrefix: "", profileDirectory: "Default" },
+  ],
+};
+
+async function connectedRouter({ settings = workRules, ...options } = {}) {
+  const harness = menuHarness({ profileDirectory: "Default", ...options });
+  await flush();
+  const port = harness.ports.at(-1);
+  port.receive({ type: "settings", settings });
+  await flush();
+  return { harness, port };
+}
+
+function openExternalLink(harness, id, url, windowId = 1) {
+  harness.setTab({ id, windowId, pendingUrl: url });
+  harness.listeners.tabCreated({ id, windowId, pendingUrl: url });
+}
+
+function openFromPage(harness, id, url, windowId = 1) {
+  harness.setTab({ id, windowId });
+  harness.listeners.tabCreated({ id, windowId });
+  harness.listeners.navigationTarget({ tabId: id, sourceTabId: 3, url });
+}
+
+const routeMessages = (port) => port.messages.filter((message) => message.type === "route");
+
+test("a link from another app moves to the profile its rule names, then its tab closes", async () => {
+  const { harness, port } = await connectedRouter();
+  assert.deepEqual(port.messages[0], { type: "hello", profileDirectory: "Default" });
+  const blocking = harness.ruleUpdates.at(-1).addRules;
+  assert.deepEqual(blocking.map((rule) => [rule.condition.urlFilter ?? "sign-in", rule.action.type, rule.priority]), [
+    ["||jira.example.com^", "block", 2], ["||example.com^", "allow", 1], ["sign-in", "allow", 3],
+  ]);
+
+  openExternalLink(harness, 9, "https://jira.example.com/browse/X-1");
+  openExternalLink(harness, 10, "https://www.example.com/");
+  await flush();
+  assert.deepEqual(routeMessages(port), [{
+    type: "route", requestId: 1, url: "https://jira.example.com/browse/X-1", profileDirectory: "Profile 2",
+  }]);
+  assert.deepEqual(harness.removedTabs, [], "the tab stays until the destination opens it");
+
+  port.receive({ type: "routed", requestId: 1, ok: true, via: "relay" });
+  await flush();
+  assert.deepEqual(harness.removedTabs, [9]);
+});
+
+test("tabs that open while Chrome starts stay put, and manual moves wait for startup to end", async () => {
+  const harness = menuHarness({ profileDirectory: "Default", settleStartup: false });
+  await flush();
+  const port = harness.ports.at(-1);
+  port.receive({ type: "settings", settings: workRules });
+  await flush();
+
+  openExternalLink(harness, 9, "https://jira.example.com/restored");
+  await flush();
+  assert.deepEqual(routeMessages(port), []);
+  assert.ok(harness.ruleUpdates.at(-1).addRules[0].condition.excludedTabIds.includes(9));
+
+  harness.setTab({ id: 42, url: "https://example.org/" });
+  harness.listeners.clicked(
+    { menuItemId: "profile:Profile%202", pageUrl: "https://example.org/" }, { id: 42, url: "https://example.org/" });
+  await flush();
+  assert.equal(harness.nativeMessages.some(({ message }) => message.type === "openURL"), false);
+  harness.advance(STARTUP_MS);
+  await flush();
+  assert.equal(harness.nativeMessages.at(-1).message.type, "openURL");
+});
+
+test("popup windows, such as sign-in windows, are never routed", async () => {
+  const { harness, port } = await connectedRouter();
+  harness.setWindowType(7, "popup");
+  openFromPage(harness, 11, "https://jira.example.com/login", 7);
+  await flush();
+  assert.deepEqual(routeMessages(port), []);
+});
+
+test("each source can be turned off, and a blocked tab from it reloads where it is", async () => {
+  const { harness, port } = await connectedRouter({
+    settings: { ...workRules, routeFrom: { otherApps: true, webPages: false } },
+  });
+  openFromPage(harness, 12, "https://jira.example.com/from-page");
+  await flush();
+  assert.deepEqual(routeMessages(port), []);
+  harness.listeners.navigationError({ tabId: 12, frameId: 0, error: "net::ERR_BLOCKED_BY_CLIENT" });
+  await flush();
+  assert.deepEqual(harness.reloadedTabs, [12]);
+  assert.ok(harness.ruleUpdates.at(-1).addRules[0].condition.excludedTabIds.includes(12));
+
+  openExternalLink(harness, 13, "https://jira.example.com/from-app");
+  await flush();
+  assert.equal(routeMessages(port).length, 1, "links from other apps are still routed");
+});
+
+test("unmatched links from other apps open in the fallback profile, and links from pages stay", async () => {
+  const { harness, port } = await connectedRouter({ settings: { ...workRules, fallbackProfileDirectory: "Profile 3" } });
+  openExternalLink(harness, 20, "https://news.example.org/");
+  openFromPage(harness, 21, "https://news.example.org/from-page");
+  await flush();
+  assert.deepEqual(routeMessages(port).map(({ url, profileDirectory }) => [url, profileDirectory]), [
+    ["https://news.example.org/", "Profile 3"],
+  ]);
+
+  // Chrome can report the new tab before saying that a page opened it.
+  harness.onWindowCheck(() => {
+    harness.onWindowCheck(null);
+    harness.listeners.navigationTarget({ tabId: 22, sourceTabId: 3, url: "https://news.example.org/late" });
+  });
+  openExternalLink(harness, 22, "https://news.example.org/late");
+  await flush();
+  assert.equal(routeMessages(port).length, 1, "a tab that a page opened stays even if Chrome names its source late");
+});
+
+test("the fallback profile keeps unmatched links, and a rule still wins over it", async () => {
+  const { harness, port } = await connectedRouter({ settings: { ...workRules, fallbackProfileDirectory: "Default" } });
+  openExternalLink(harness, 23, "https://news.example.org/");
+  openExternalLink(harness, 24, "https://jira.example.com/browse/X-3");
+  await flush();
+  assert.deepEqual(routeMessages(port).map(({ url }) => url), ["https://jira.example.com/browse/X-3"]);
+});
+
+test("a restarted service worker replaces the rules its previous run left in Chrome", async () => {
+  const leftoverRules = [{ id: 1 }, { id: 2 }];
+  const { harness } = await connectedRouter({ leftoverRules });
+  assert.deepEqual(harness.ruleUpdates.at(-1).removeRuleIds, [1, 2]);
+  assert.ok(harness.ruleUpdates.at(-1).addRules.length > 0);
+});
+
+test("a failed route leaves the tab open and reloads it if Chrome blocked it", async () => {
+  const { harness, port } = await connectedRouter();
+  openExternalLink(harness, 14, "https://jira.example.com/browse/X-2");
+  await flush();
+  harness.listeners.navigationError({ tabId: 14, frameId: 0, error: "net::ERR_BLOCKED_BY_CLIENT" });
+  port.receive({ type: "routed", requestId: 1, ok: false });
+  await flush();
+  assert.deepEqual(harness.removedTabs, []);
+  assert.deepEqual(harness.reloadedTabs, [14]);
+});
+
+test("tabs that another profile sends here open in the last window and are never routed again", async () => {
+  const { harness, port } = await connectedRouter();
+  port.receive({ type: "open", requestId: "r1", urls: ["https://jira.example.com/moved"] });
+  await flush();
+  // The tab opens blank and loads its URL once request blocking skips it, so the page loads only once.
+  assert.deepEqual(plain(harness.openedTabs.at(-1)), { windowId: 1, url: "about:blank", active: true });
+  assert.ok(harness.ruleUpdates.at(-1).addRules.every((rule) => rule.condition.excludedTabIds.includes(500)));
+  assert.deepEqual(plain(harness.tabUpdates.at(-1)), { id: 500, url: "https://jira.example.com/moved" });
+  assert.deepEqual(plain(harness.windowUpdates.at(-1)), { id: 1, focused: true });
+  assert.deepEqual(port.messages.at(-1), { type: "opened", requestId: "r1", ok: true, started: true });
+
+  harness.listeners.tabUpdated(500, { url: "https://jira.example.com/moved" });
+  await flush();
+  assert.deepEqual(routeMessages(port), []);
+});
+
+test("an arrival that opened its tabs succeeds even if Chrome declines to focus the window", async () => {
+  const { port } = await connectedRouter({ focusError: new Error("Cannot focus") });
+  port.receive({ type: "open", requestId: "r2", urls: ["https://example.com/a"] });
+  await flush();
+  assert.deepEqual(port.messages.at(-1), { type: "opened", requestId: "r2", ok: true, started: true });
+});
+
+test("an arrival with no window to open in reports that nothing opened, so ProfileBar can open it another way",
+  async () => {
+    const { port } = await connectedRouter({ noWindow: true });
+    port.receive({ type: "open", requestId: "r3", urls: ["https://example.com/a"] });
+    await flush();
+    assert.deepEqual(port.messages.at(-1), { type: "opened", requestId: "r3", ok: false, started: false });
+  });
+
+test("a blocked tab that the user navigates while it is routed stays open", async () => {
+  const { harness, port } = await connectedRouter();
+  openExternalLink(harness, 30, "https://jira.example.com/browse/X-4");
+  await flush();
+  harness.listeners.navigationError({ tabId: 30, frameId: 0, error: "net::ERR_BLOCKED_BY_CLIENT" });
+  harness.setTab({ id: 30, windowId: 1, url: "https://example.org/elsewhere" });
+  port.receive({ type: "routed", requestId: 1, ok: true });
+  await flush();
+  assert.deepEqual(harness.removedTabs, []);
+  assert.deepEqual(harness.reloadedTabs, [], "the page the user went to is not reloaded");
+});
+
+test("an arrival fails without loading its page when Chrome rejects the request-blocking rules", async () => {
+  const { harness, port } = await connectedRouter();
+  harness.failRuleUpdates(new Error("Regular expression is too large"));
+  port.receive({ type: "open", requestId: "r4", urls: ["https://example.com/a"] });
+  await flush();
+  assert.deepEqual(port.messages.at(-1), { type: "opened", requestId: "r4", ok: false, started: true });
+  assert.deepEqual(harness.removedTabs, [500], "the blank tab closes");
+  assert.equal(harness.tabUpdates.some(({ url }) => url === "https://example.com/a"), false);
+  let state;
+  harness.listeners.message({ type: "get-link-routing" }, {}, (value) => { state = value; });
+  await flush();
+  assert.match(state.ruleError, /^Chrome could not apply the link-routing rules/);
+});
+
+test("a page blocked by another extension is reloaded at most once", async () => {
+  const { harness } = await connectedRouter();
+  harness.setTab({ id: 31, windowId: 1, url: "https://ads.example/" });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    harness.listeners.navigationError({ tabId: 31, frameId: 0, error: "net::ERR_BLOCKED_BY_CLIENT" });
+    await flush();
+  }
+  assert.deepEqual(harness.reloadedTabs, [31]);
+});
+
+test("navigation inside a fresh tab after its page shows is not routed, but an immediate redirect is", async () => {
+  const { harness, port } = await connectedRouter();
+  openExternalLink(harness, 32, "https://news.example.org/");
+  harness.listeners.navigationCommitted({ tabId: 32, frameId: 0 });
+  harness.listeners.tabUpdated(32, { url: "https://jira.example.com/redirected" });
+  await flush();
+  assert.equal(routeMessages(port).length, 1, "a redirect within a moment of the page showing is routed");
+
+  openExternalLink(harness, 33, "https://news.example.org/");
+  harness.listeners.navigationCommitted({ tabId: 33, frameId: 0 });
+  harness.advance(1000);
+  harness.listeners.tabUpdated(33, { url: "https://jira.example.com/clicked" });
+  await flush();
+  assert.equal(routeMessages(port).length, 1, "a link the user follows later stays in the tab");
+});
+
+test("sign-in sites are never routed, even to the fallback profile", async () => {
+  const { harness, port } = await connectedRouter({
+    settings: { ...workRules, fallbackProfileDirectory: "Profile 3" },
+  });
+  openExternalLink(harness, 34, "https://accounts.google.com/signin");
+  await flush();
+  assert.deepEqual(routeMessages(port), []);
+});
+
+test("identifying profiles brings the asking tab back to the front", async () => {
+  const harness = menuHarness({ hostResponse: { ok: true, identified: ["Default", "Profile 2"], unreachable: [] } });
+  let result;
+  harness.listeners.message({ type: "identify-profiles" }, { tab: { id: 7, windowId: 3 } }, (value) => { result = value; });
+  await flush();
+  assert.deepEqual(plain(result), { ok: true, identified: ["Default", "Profile 2"], unreachable: [] });
+  assert.deepEqual(plain(harness.windowUpdates.at(-1)), { id: 3, focused: true });
+  assert.deepEqual(plain(harness.tabUpdates.at(-1)), { id: 7, active: true });
+});
+
+test("an older ProfileBar turns routing off until it is updated", async () => {
+  const harness = menuHarness({ profileDirectory: "Default" });
+  await flush();
+  const port = harness.ports.at(-1);
+  port.receive({ ok: false, error: "invalid_request" });
+  port.drop();
+  let state;
+  harness.listeners.message({ type: "get-link-routing" }, {}, (value) => { state = value; });
+  await flush();
+  assert.equal(state.status, "update-required");
+  assert.deepEqual(harness.ruleUpdates.at(-1).addRules, []);
+  harness.advance(1000);
+  await flush();
+  assert.equal(harness.ports.length, 2, "it checks again later in case ProfileBar was updated");
+});
+
+test("a newly identified profile reconnects with its directory", async () => {
+  const harness = menuHarness();
+  await flush();
+  assert.deepEqual(harness.ports[0].messages[0], { type: "hello", profileDirectory: null });
+  harness.listeners.message({ type: "profile-identified", profileDirectory: "Profile 3" }, {}, () => {});
+  await flush();
+  assert.equal(harness.storage.profileDirectory, "Profile 3");
+  assert.equal(harness.ports[0].disconnected, true);
+  assert.deepEqual(harness.ports.at(-1).messages[0], { type: "hello", profileDirectory: "Profile 3" });
+});
+
+test("always opening a site in a profile saves a host rule and moves the page there", async () => {
+  const { harness } = await connectedRouter({ hostResponse: { ok: true, profiles: [
+    { directory: "Default", name: "Personal" }, { directory: "Profile 2", name: "Work" },
+  ] } });
+  await harness.refresh();
+  assert.deepEqual(
+    harness.menus.filter((item) => item.parentId === "always-open-site").map((item) => item.title),
+    ["Personal", "Work"],
+  );
+
+  harness.setTab({ id: 42, url: "https://wiki.example.org/page" });
+  harness.listeners.clicked(
+    { menuItemId: "always:Profile%202", pageUrl: "https://wiki.example.org/page" },
+    { id: 42, url: "https://wiki.example.org/page" },
+  );
+  await flush();
+  const saved = harness.nativeMessages.find(({ message }) => message.type === "saveLinkRouting").message;
+  assert.deepEqual(plain(saved.settings.rules.at(-1)), {
+    id: "rule-1", kind: "host", host: "wiki.example.org", pathPrefix: "", profileDirectory: "Profile 2",
+  });
+  assert.equal(harness.nativeMessages.at(-1).message.type, "openURL");
+  assert.deepEqual(harness.removedTabs, [42]);
 });
