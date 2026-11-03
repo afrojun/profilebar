@@ -24,9 +24,9 @@ final class LinkRoutingSettingsView: NSView, NSTableViewDataSource, NSTableViewD
 
         var width: CGFloat {
             switch self {
-            case .kind: 120
+            case .kind: 140
             case .text: 200
-            case .profile: 150
+            case .profile: 130
             }
         }
     }
@@ -170,7 +170,7 @@ final class LinkRoutingSettingsView: NSView, NSTableViewDataSource, NSTableViewD
             field.target = self
             field.action = #selector(changeText(_:))
             field.cell?.sendsActionOnEndEditing = true
-            return field
+            return Self.verticallyCentered(field)
         case .profile, nil:
             let popup = popUp(action: #selector(changeProfile(_:)))
             for profile in profiles {
@@ -183,6 +183,19 @@ final class LinkRoutingSettingsView: NSView, NSTableViewDataSource, NSTableViewD
             popup.select(popup.itemArray.first { $0.representedObject as? String == rule.profileDirectory })
             return popup
         }
+    }
+
+    /// A table stretches its cell view to the row height, which puts a text field above the popups' baseline.
+    private static func verticallyCentered(_ field: NSTextField) -> NSView {
+        let cell = NSTableCellView()
+        field.translatesAutoresizingMaskIntoConstraints = false
+        cell.addSubview(field)
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: cell.leadingAnchor),
+            field.trailingAnchor.constraint(equalTo: cell.trailingAnchor),
+            field.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+        ])
+        return cell
     }
 
     /// Adds the item through the menu, because `addItem(withTitle:)` replaces an item with the same title.
