@@ -291,6 +291,8 @@ function connectRouting() {
     }
   });
   port.onDisconnect.addListener(() => {
+    // Chrome logs the reason as an unchecked error unless it is read. A missing or exited ProfileBar is expected here.
+    void chrome.runtime.lastError;
     if (routingPort !== port) return;
     routingPort = null;
     if (routing.status !== "update-required") routing.status = "unavailable";

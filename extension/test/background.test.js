@@ -40,9 +40,15 @@ function menuHarness({
   let nativeError;
   let closeError;
   let openGate;
+  let pendingLastError = null;
   const chrome = {
     runtime: {
       id: extensionID,
+      // Like Chrome, an error set for a callback counts as checked once the extension reads it.
+      get lastError() {
+        if (pendingLastError) pendingLastError.checked = true;
+        return pendingLastError?.error;
+      },
       getManifest() { return installedFromStore ? { update_url: "https://clients2.google.com/service/update2/crx" } : {}; },
       onInstalled: { addListener(listener) { listeners.installed = listener; } },
       onStartup: { addListener(listener) { listeners.startup = listener; } },
@@ -209,6 +215,14 @@ function menuHarness({
     setNativeError(error) { nativeError = error; },
     setCloseError(error) { closeError = error; },
     setOpenGate(gate) { openGate = gate; },
+    // Closes the port the way Chrome does when ProfileBar exits, and reports whether the extension read the error.
+    exitHost(port, message) {
+      pendingLastError = { error: { message }, checked: false };
+      port.drop();
+      const { checked } = pendingLastError;
+      pendingLastError = null;
+      return checked;
+    },
     setTab(tab) { tabs.set(tab.id, tab); },
     failRuleUpdates(error) { ruleUpdateError = error; },
     setGroup(group) { groups.set(group.id, group); },
@@ -863,6 +877,16 @@ test("an older ProfileBar turns routing off until it is updated", async () => {
   harness.advance(1000);
   await flush();
   assert.equal(harness.ports.length, 2, "it checks again later in case ProfileBar was updated");
+});
+
+test("ProfileBar exiting is handled quietly and routing reconnects", async () => {
+  const harness = menuHarness({ profileDirectory: "Default" });
+  await flush();
+  const checked = harness.exitHost(harness.ports.at(-1), "Native host has exited.");
+  assert.equal(checked, true, "an unread error shows on the extension's Errors page");
+  harness.advance(1000);
+  await flush();
+  assert.equal(harness.ports.length, 2);
 });
 
 test("a newly identified profile reconnects with its directory", async () => {
