@@ -51,7 +51,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  N["A fresh tab gets a URL"] --> P{"Popup window or arrival?"}
+  N["A fresh tab gets a URL"] --> P{"Popup, split view or arrival?"}
   P -->|"yes"| Stay["Leave the tab"]
   P -->|"no"| E{"Is its source ticked in settings?"}
   E -->|"no"| Stay
@@ -78,12 +78,15 @@ The extension never routes:
 
 - Navigation inside an existing tab.
 - Popup windows. Sign-in flows such as "Sign in with Google" use popups.
+- Links opened into a split view, which the user placed beside a page on purpose.
 - Arrivals, which are tabs that ProfileBar opens in this profile, such as routed links and moved tabs or groups.
   - The extension opens each arrival blank and exempts its tab ID from request blocking.
   - It then loads the URL, so request blocking never stops an arrival and the page loads once.
 - Tabs created in the first 3 seconds after the extension starts.
   - Chrome restores tabs while the extension starts, so restored tabs arrive as new tabs.
   - A link that starts Chrome is therefore not routed. It opens in the last profile the user used.
+- Reopened and duplicated tabs, such as a tab brought back with Cmd+Shift+T.
+  - Chrome creates them with the page they showed already set as `url`. A new tab has only a `pendingUrl`.
 
 ## Routing a link
 
@@ -148,7 +151,7 @@ Each extension copy compiles the rules into `declarativeNetRequest` (DNR) sessio
 DNR blocks some tabs that the extension then decides not to route:
 
 - DNR cannot tell a link from another app apart from a link opened by a web page before the request starts. If only one source is ticked, DNR can block a tab from the other source.
-- Tabs that Chrome restores at startup look like fresh tabs to DNR.
+- Tabs that Chrome restores or reopens look like fresh tabs to DNR.
 
 In both cases, the extension adds the tab to `excludedTabIds` and reloads it. The blocked request never reached the server, so the page loads once. Another extension can also block a page, so the extension reloads each tab at most once.
 
