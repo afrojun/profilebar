@@ -106,7 +106,17 @@ function menuHarness({
       onAttached: { addListener(listener) { listeners.tabAttached = listener; } },
       onDetached: { addListener(listener) { listeners.tabDetached = listener; } },
       onCreated: { addListener(listener) { listeners.tabCreated = listener; } },
-      onUpdated: { addListener(listener) { listeners.tabUpdated = listener; } },
+      onActivated: { addListener(listener) { listeners.tabActivated = listener; } },
+      onUpdated: {
+        addListener(listener) {
+          const previous = listeners.tabUpdated;
+          // Chrome always passes the updated tab.
+          listeners.tabUpdated = (tabId, changeInfo, tab = tabs.get(tabId) ?? { id: tabId }) => {
+            previous?.(tabId, changeInfo, tab);
+            listener(tabId, changeInfo, tab);
+          };
+        },
+      },
       onRemoved: { addListener(listener) { listeners.tabRemoved = listener; } },
       async create(tab) {
         openedTabs.push(tab);
@@ -247,7 +257,7 @@ test("a missing ProfileBar shows setup and keeps a page fallback", async () => {
   assert.deepEqual(harness.menus.map((item) => item.id), [
     "move-to-profile", "setup-profilebar", "profiles-refresh-divider", "refresh-profiles",
   ]);
-  assert.equal(harness.menus[0].contexts.join(","), "page");
+  assert.equal(harness.menus[0].contexts.join(","), "page,action");
   harness.listeners.clicked({ menuItemId: "setup-profilebar" });
   assert.equal(harness.optionsOpened, 1);
 });
@@ -292,6 +302,57 @@ test("group moves appear only while the focused window has a group", async () =>
   await harness.settle();
   assert.deepEqual(groupItemsVisible(), [false, false]);
   assert.equal(harness.nativeMessages.length, 1, "visibility changes must not contact ProfileBar");
+});
+
+test("the toolbar menu offers the moves that suit the active tab", async () => {
+  const harness = menuHarness({ hostResponse: { ok: true, profiles: [{ directory: "Profile 2", name: "Work" }] } });
+  const item = (id) => harness.menus.find((menu) => menu.id === id);
+  const toolbar = () => ({
+    moveTab: item("profile:Profile%202").enabled, alwaysOpen: item("always-open-site").enabled,
+    moveGroup: item("action-group").visible,
+  });
+  harness.setTab({ id: 30, windowId: 1, active: true, url: "chrome://settings/", groupId: -1 });
+  await harness.refresh();
+  for (const id of ["move-to-profile", "profile:Profile%202", "always-open-site", "action-group",
+    "action-group:profile:Profile%202"]) {
+    assert.ok(item(id).contexts.includes("action"), id);
+  }
+  assert.deepEqual(toolbar(), { moveTab: false, alwaysOpen: false, moveGroup: false });
+  assert.notEqual(item("move-to-profile").enabled, false, "Refresh profiles stays reachable on any tab");
+
+  harness.setGroup({ id: 8, windowId: 1, title: "Research", color: "blue", collapsed: false });
+  harness.setTab({ id: 30, windowId: 1, active: false, url: "chrome://settings/", groupId: -1 });
+  harness.setTab({ id: 31, windowId: 1, active: true, url: "https://example.com/", groupId: 8, index: 0 });
+  harness.listeners.tabActivated({ tabId: 31, windowId: 1 });
+  await harness.settle();
+  assert.deepEqual(toolbar(), { moveTab: true, alwaysOpen: true, moveGroup: true });
+
+  const ungrouped = { id: 31, windowId: 1, active: true, url: "https://example.com/", groupId: -1, index: 0 };
+  harness.setTab(ungrouped);
+  harness.listeners.tabUpdated(31, { groupId: -1 }, ungrouped);
+  await harness.settle();
+  assert.equal(toolbar().moveGroup, false);
+  assert.equal(harness.nativeMessages.length, 1, "following the active tab must not contact ProfileBar");
+});
+
+test("the toolbar menu keeps setup reachable on pages that cannot move", async () => {
+  const harness = menuHarness();
+  harness.setNativeError(new Error("ProfileBar is not installed"));
+  harness.setTab({ id: 30, windowId: 1, active: true, url: "chrome://extensions/", groupId: -1 });
+  await harness.refresh();
+  const setup = harness.menus.find((menu) => menu.id === "setup-profilebar");
+  assert.ok(setup.contexts.includes("action"));
+  assert.notEqual(harness.menus.find((menu) => menu.id === "move-to-profile").enabled, false);
+});
+
+test("moving a group from the toolbar menu moves the active tab's group", async () => {
+  const harness = menuHarness({ hostResponse: { ok: true } });
+  harness.setGroup({ id: 8, windowId: 7, title: "Research", color: "blue", collapsed: false });
+  harness.setTab({ id: 1, windowId: 7, groupId: 8, index: 0, url: "https://example.com/first" });
+  harness.listeners.clicked({ menuItemId: "action-group:profile:Default" }, { id: 1, windowId: 7, groupId: 8 });
+  await new Promise(setImmediate);
+  assert.equal(harness.nativeMessages.at(-1).message.type, "openGroup");
+  assert.deepEqual(harness.removedTabs, [1]);
 });
 
 test("profiles that share a name are labelled by folder and reported to the setup page", async () => {
@@ -391,7 +452,7 @@ test("a successful handoff closes the clicked tab after opening it in the select
 
   const profiles = harness.menus.filter((item) => item.id.startsWith("profile:"));
   assert.deepEqual(profiles.map((item) => item.title), ["Work (Default)", "Work (Profile 2)"]);
-  assert.equal(harness.menus[0].contexts.join(","), "page");
+  assert.equal(harness.menus[0].contexts.join(","), "page,action");
   const tabRoot = harness.menus.find((item) => item.id === "tab-actions");
   assert.equal(tabRoot.title, "Move tabs to profile");
   assert.equal(tabRoot.contexts.join(","), "tab");
