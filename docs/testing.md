@@ -32,7 +32,7 @@ If two profiles share a name, repeat these checks for each of them. Chrome title
 
 For settings or shortcut changes, also check that repeated **Settings…** actions reuse one window, a hidden menu-bar avatar does not disable its shortcut, and shortcut conflicts leave the previous assignment intact. Restore only settings changed for the test. Close only windows the test created, and do not remove Chrome profile data.
 
-For tab moves, load the ProfileBar for Chrome development build and move an HTTP page to another Chrome profile. Check that the source tab closes only after the destination opens, and that the setup page and menu give a useful setup path when ProfileBar is unavailable.
+For tab moves, load the ProfileBar for Chrome development build and move an HTTP page to another Chrome profile. Check that the source tab closes only after the destination opens, and that the setup page and menu give a useful setup path when ProfileBar is unavailable. Right-click the toolbar icon too: its move items act on the active tab, their destinations grey out on pages such as `chrome://extensions` while **Set up** and **Refresh profiles** stay available, and **Move group to profile** appears only on a tab in a group.
 With a Chrome window focused, confirm its own profile is absent from the extension's page and tab destination menus. When Accessibility access is unavailable or the focused window cannot be matched uniquely, confirm all profiles remain visible.
 
 For a group move, right-click a tab inside a group. With the extension installed
@@ -42,12 +42,15 @@ group closes. Repeat with the extension absent or disabled in the destination:
 the URLs should open without a group. If the receiver claims a handoff but
 cannot create the group, the source group must stay open. The group items should appear only in windows that have a tab group.
 
+In Chrome 155 or later, move either half of a split view from the tab strip, then a group that contains a split. Both halves should move, and with the extension in the destination they should arrive split. Without it, or in older Chrome, they arrive as separate tabs.
+
 If two profiles share a name, the extension's setup page should show a **Rename** button for each. A button should open `chrome://settings/manageProfile` in that profile when the extension is installed there, and otherwise explain how to rename it by hand.
 
 For link routing, load the development extension in at least two profiles, choose **Identify profiles**, and use ProfileBar Dev's own rules file (`~/Library/Application Support/ProfileBar Dev/link-routing.json`) with throwaway sites such as `example.com`. Then check that:
 
 - A link from another app (`open -a "Google Chrome" <url>`) that a rule assigns elsewhere opens in that profile, and the source tab closes.
 - Links that a page opens in new tabs move the same way. Popup windows, navigation inside a tab, and links that match no rule stay put.
+- A tab reopened with Cmd+Shift+T, a duplicated tab, and a link opened with **Open link in split view** stay in their profile.
 - A tab that ProfileBar opens in a profile, whether routed, moved, or part of a moved group, loads once and is never routed again.
 - With a profile chosen under **Open other links from apps in**, a link from another app that matches no rule opens there, while a link that a page opens with no matching rule stays put.
 - Clearing **Other apps** or **Web pages** stops routing from that source, and edits in Settings and on the options page reach every profile.
