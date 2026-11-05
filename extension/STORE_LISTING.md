@@ -13,37 +13,23 @@
 **Detailed description:**
 
 Keep work, personal, and side project pages in the profile where they belong.
-Right-click a page, choose **Move tab to profile**, and pick a destination. The
-page opens there, and the original tab closes once the move succeeds. The
-extension's toolbar icon offers the same moves for the tab you're on, including
-its whole group.
-
-In Chrome 150 and later, right-click a tab to move it, move several selected
-tabs together in tab order, or move a whole tab group. When this extension is
-also installed in the destination profile, the group keeps its name, colour,
-and collapsed state. Otherwise, the pages still open in the chosen profile
-without a group. Moving either half of a split view from the tab strip moves
-both. With ProfileBar 1.6, Chrome 155 or later, and this extension in the
-destination profile, they open side by side again.
+Right-click a page to move it to another profile, or the extension's toolbar
+icon to move the tab you're on or its group. In Chrome 150 and later,
+right-click the tab strip to move a selection, a group, or both halves of a
+split view. The originals close once the pages open. With this extension in
+both profiles, groups keep their name and colour, and with ProfileBar 1.6 and
+Chrome 155 or later, split views arrive split.
 
 Link routing opens new tabs in the profile you choose for each site, without
-making anything your default browser. Add rules on the options page, in
-ProfileBar's settings, or by right-clicking a page and choosing **Always open
-this site in**. A link from another app or a link that a page opens in a new
-tab then moves to its profile in about a tenth of a second. Links that match no
-rule stay where they open, or links from other apps can go to a profile you
-choose.
+changing your default browser. Add rules on the options page, in ProfileBar, or
+by right-clicking a page and choosing **Always open this site in**.
 
-ProfileBar for Chrome works with ProfileBar, a free menu-bar app for macOS that
-switches Chrome profiles in one click. Chrome extensions cannot open pages in
-another profile on their own, so the extension hands the selected URLs to
-ProfileBar on your Mac, which asks Chrome to open them. Install ProfileBar from
-https://afrojun.dev/profilebar/ and open it once before using the extension.
+Requires ProfileBar, a free menu-bar app for macOS that opens the pages in the
+chosen profile. Install it from https://afrojun.dev/profilebar/ and open it
+once.
 
-The extension stores no URLs and has no analytics, ads, tracking, accounts,
-remote code, or network requests. Link routing checks new tabs against your
-rules on your device. URLs go only to ProfileBar on your device.
-The source code is available under the MIT License.
+No analytics, ads, tracking, accounts, remote code, or network requests. URLs
+go only to ProfileBar on your Mac. Open source under the MIT License.
 
 Google Chrome is a trademark of Google LLC.
 
