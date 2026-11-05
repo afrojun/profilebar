@@ -72,16 +72,21 @@ on run arguments
 end run
 APPLESCRIPT
 
-# Finder can keep the volume busy for a moment after it lays out the window, so the detach is retried.
-detached=false
+# Finder can keep the volume busy for a moment after it lays out the window. A busy detach can still finish
+# a moment later, so each retry checks whether the volume is still mounted rather than trusting the exit status.
+is_mounted() {
+  local info
+  info="$(hdiutil info)" || { print -u2 "hdiutil info failed"; exit 1; }
+  [[ "$info" == *"$mount"* ]]
+}
 for attempt in {1..10}; do
-  if hdiutil detach "$mount" >/dev/null 2>&1; then
-    detached=true
-    break
-  fi
+  hdiutil detach "$mount" >/dev/null 2>&1 || true
+  is_mounted || break
   sleep 1
 done
-[[ "$detached" == true ]] || hdiutil detach "$mount" -force >/dev/null
+if is_mounted; then
+  hdiutil detach "$mount" -force >/dev/null
+fi
 mounted=false
 hdiutil convert "$writable" \
   -format UDZO \
