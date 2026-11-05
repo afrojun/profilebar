@@ -19,6 +19,7 @@
     "tabs",
     "webNavigation"
   ],
+  "action": {},
   "background": {
     "service_worker": "background.js"
   },

@@ -9,6 +9,7 @@ const MENU_REFRESH = "refresh-profiles";
 const PROFILE_PREFIX = "profile:";
 const ALWAYS_MENU_ROOT = "always-open-site";
 const ALWAYS_PREFIX = "always:";
+const ACTION_GROUP_ROOT = "action-group";
 
 importScripts("routing-rules.js", "router.js");
 
@@ -16,6 +17,8 @@ let menuRefresh = Promise.resolve();
 // Chrome does not say which tab was right-clicked before it shows the menu, so the group actions
 // appear while the focused window has a group. Null until this service worker builds the menu.
 let groupMenuIds = null;
+// The toolbar menu acts on the active tab, so its items follow that tab.
+let activeTabMenuIds = { webPage: [], inGroup: [] };
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") {
@@ -33,9 +36,15 @@ for (const event of [
   chrome.tabGroups.onCreated, chrome.tabGroups.onRemoved, chrome.tabs.onAttached, chrome.tabs.onDetached,
 ]) {
   event.addListener(() => {
-    void updateGroupMenu();
+    void updateTabMenus();
   });
 }
+chrome.tabs.onActivated.addListener(() => {
+  void updateTabMenus();
+});
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tab.active && (changeInfo.url || "groupId" in changeInfo)) void updateTabMenus();
+});
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "check-profilebar") {
     void refreshProfileMenu().then(sendResponse);
@@ -49,7 +58,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   const itemId = String(info.menuItemId);
-  const menuId = itemId.replace(/^(tab:|group:)/, "");
+  const menuId = itemId.replace(/^(tab:|group:|action-group:)/, "");
   if (menuId === MENU_SETUP) {
     void chrome.runtime.openOptionsPage();
     return;
@@ -63,7 +72,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     return;
   }
   if (menuId.startsWith(PROFILE_PREFIX)) {
-    const mode = itemId.startsWith("group:") ? "group" : itemId.startsWith("tab:") ? "tab" : "page";
+    const mode = /^(action-)?group:/.test(itemId) ? "group" : itemId.startsWith("tab:") ? "tab" : "page";
     void moveToProfile(decodeURIComponent(menuId.slice(PROFILE_PREFIX.length)), info, tab, mode);
   }
 });
@@ -72,12 +81,22 @@ function refreshProfileMenu() {
   return queueMenuUpdate(buildProfileMenu);
 }
 
-function updateGroupMenu() {
-  return queueMenuUpdate(async () => {
-    if (groupMenuIds === null) return buildProfileMenu();
-    const visible = await focusedWindowHasGroup();
-    await Promise.all(groupMenuIds.map((id) => updateMenu(id, { visible })));
-  });
+function updateTabMenus() {
+  return queueMenuUpdate(() => (groupMenuIds === null ? buildProfileMenu() : showTabActions()));
+}
+
+async function showTabActions() {
+  const [hasGroup, [activeTab]] = await Promise.all([
+    focusedWindowHasGroup(),
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }),
+  ]);
+  const onWebPage = RoutingRules.isWebUrl(activeTab?.url);
+  const inGroup = Number.isInteger(activeTab?.groupId) && activeTab.groupId !== -1;
+  await Promise.all([
+    ...groupMenuIds.map((id) => updateMenu(id, { visible: hasGroup })),
+    ...activeTabMenuIds.webPage.map((id) => updateMenu(id, { enabled: onWebPage })),
+    ...activeTabMenuIds.inGroup.map((id) => updateMenu(id, { visible: inGroup })),
+  ]);
 }
 
 function queueMenuUpdate(update) {
@@ -125,19 +144,30 @@ async function buildProfileMenu() {
 
   await removeMenus();
   groupMenuIds = [];
+  activeTabMenuIds = { webPage: [], inGroup: [] };
   const named = namedProfiles(allProfiles);
   await buildPageMenu(state, destinations);
   if (state === "ready" && named.length > 0) {
     await buildAlwaysOpenMenu(named);
+    activeTabMenuIds.webPage.push(ALWAYS_MENU_ROOT);
+  }
+  if (state === "ready" && destinations.length > 0) {
+    // Set up and Refresh work on any tab, so only the page menu's destinations follow the active tab.
+    activeTabMenuIds.webPage.push(...namedProfiles(destinations)
+      .map(({ directory }) => `${PROFILE_PREFIX}${encodeURIComponent(directory)}`));
+    await buildGroupActionMenu(namedProfiles(destinations));
+    activeTabMenuIds.inGroup.push(ACTION_GROUP_ROOT);
   }
   if (chrome.contextMenus.ContextType?.TAB) {
     await buildTabMenu(state, destinations);
   }
+  await showTabActions();
   return { state, destinationCount: destinations?.length ?? 0, sharedNameProfiles, profiles: named };
 }
 
+// The page menu also appears on the toolbar icon, where it acts on the active tab.
 async function buildPageMenu(state, profiles) {
-  const contexts = ["page"];
+  const contexts = ["page", "action"];
   const parentId = PAGE_MENU_ROOT;
   await createMenu({ id: parentId, title: "Move tab to profile", contexts });
   if (state === "unsupported") {
@@ -164,7 +194,7 @@ async function buildPageMenu(state, profiles) {
 
 // Lists every profile, including this one, because a rule can keep a site here.
 async function buildAlwaysOpenMenu(profiles) {
-  const contexts = ["page"];
+  const contexts = ["page", "action"];
   await createMenu({ id: ALWAYS_MENU_ROOT, title: "Always open this site in", contexts });
   for (const profile of profiles) {
     await createMenu({
@@ -196,10 +226,9 @@ async function buildTabMenu(state, profiles) {
       title: `Move group to ${profile.title}`,
     }));
     groupMenuIds = ["tab:group-divider", ...groupItems.map(({ id }) => id)];
-    const visible = await focusedWindowHasGroup();
-    await createTabDivider("tab:group-divider", { visible });
+    await createTabDivider("tab:group-divider");
     for (const item of groupItems) {
-      await createMenu({ ...item, parentId, contexts, visible });
+      await createMenu({ ...item, parentId, contexts });
     }
   } else {
     let option;
@@ -216,6 +245,20 @@ async function buildTabMenu(state, profiles) {
   if (state !== "unsupported") {
     await createTabDivider("tab:profiles-refresh-divider");
     await createMenu({ id: `tab:${MENU_REFRESH}`, parentId, title: "Refresh profiles", contexts });
+  }
+}
+
+// The tab strip's group moves need a right-clicked tab, so the toolbar has its own for the active tab's group.
+async function buildGroupActionMenu(profiles) {
+  const contexts = ["action"];
+  await createMenu({ id: ACTION_GROUP_ROOT, title: "Move group to profile", contexts });
+  for (const profile of profiles) {
+    await createMenu({
+      id: `action-group:${PROFILE_PREFIX}${encodeURIComponent(profile.directory)}`,
+      parentId: ACTION_GROUP_ROOT,
+      title: profile.title,
+      contexts,
+    });
   }
 }
 

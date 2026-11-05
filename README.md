@@ -23,7 +23,9 @@ If that profile already has a window open, ProfileBar brings it forward, even fr
 
 Install the [ProfileBar for Chrome](https://chromewebstore.google.com/detail/pkibfaoenoibogibnlkkpmgagjckjijh) extension to move tabs from the
 right-click menu. Right-click a page and choose **Move tab to profile**, or
-right-click a tab and choose **Move tabs to profile**. The extension closes the
+right-click a tab and choose **Move tabs to profile**. Right-clicking the
+extension's toolbar icon offers the same moves for the tab you're on, including
+**Move group to profile** when that tab is in a group. The extension closes the
 original tabs after ProfileBar reports success. ProfileBar registers the local
 Chrome helper when it launches. If the extension cannot find it, launch
 ProfileBar and choose **Refresh profiles** from the extension menu.
