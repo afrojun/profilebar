@@ -14,13 +14,17 @@
 
 Keep work, personal, and side project pages in the profile where they belong.
 Right-click a page, choose **Move tab to profile**, and pick a destination. The
-page opens there, and the original tab closes once the move succeeds.
+page opens there, and the original tab closes once the move succeeds. The
+extension's toolbar icon offers the same moves for the tab you're on, including
+its whole group.
 
 In Chrome 150 and later, right-click a tab to move it, move several selected
 tabs together in tab order, or move a whole tab group. When this extension is
 also installed in the destination profile, the group keeps its name, colour,
 and collapsed state. Otherwise, the pages still open in the chosen profile
-without a group.
+without a group. Moving either half of a split view from the tab strip moves
+both. With ProfileBar 1.6, Chrome 155 or later, and this extension in the
+destination profile, they open side by side again.
 
 Link routing opens new tabs in the profile you choose for each site, without
 making anything your default browser. Add rules on the options page, in
@@ -61,7 +65,8 @@ own rules, through the local ProfileBar app.
 **Permission justifications:**
 
 - `contextMenus`: Show the move actions and destination profiles in the page
-  and tab right-click menus, and **Always open this site in** on pages.
+  and tab right-click menus and the toolbar icon's menu, and **Always open this
+  site in** on pages.
 - `declarativeNetRequest`: Hold back the page load of a new tab that a
   link-routing rule assigns to another profile, so the site does not load in
   both profiles. The session rules come only from the user's link-routing rules
@@ -78,8 +83,10 @@ own rules, through the local ProfileBar app.
 - `tabs`: Read the URLs of the clicked, selected, or grouped tabs when the user
   chooses a move action, then close those tabs after a successful move. Read
   the first URL of each new tab to check it against the user's link-routing
-  rules, and close it once another profile has opened it. Tabs that were
-  already open and navigation inside a tab are never read.
+  rules, and close it once another profile has opened it. Read the active
+  tab's URL and group to show only the toolbar actions that apply, and which
+  tabs share a split view so a split moves together. Tabs that were already
+  open and navigation inside a tab are never read for link routing.
 - `tabGroups`: Read the chosen group's title, colour, and collapsed state, then
   recreate them in the destination profile. Check whether the focused window
   has a tab group, without reading URLs, to show the group actions only when
@@ -95,8 +102,9 @@ activity. It reads selected tabs when the user chooses a move action, and the
 first URL of new tabs to compare with the user's link-routing rules on the
 device. It sends URLs only to the ProfileBar app on the same device, and only
 for a move action, a rule that names another profile, or the profile the user
-chose for links from other apps that match no rule. Neither component
-retains them or collects other user data.
+chose for links from other apps that match no rule. To show only the toolbar
+actions that apply, it also checks the active tab's URL and group on the
+device. Neither component retains them or collects other user data.
 
 Certify the limited-use declarations in the Dashboard. Check the Dashboard's
 current wording before submission because Google may change the available data
@@ -118,7 +126,7 @@ Moving tabs needs the ProfileBar app on macOS and at least two Chrome profiles.
 
 1. Install the extension before ProfileBar. The setup page should explain how
    to connect, and the right-click menu should offer **Set up ProfileBar…**.
-2. Install ProfileBar 1.5 or later from https://afrojun.dev/profilebar/ and
+2. Install ProfileBar 1.6 or later from https://afrojun.dev/profilebar/ and
    open it once. Choose **Check again** on the setup page. It should report
    **Connected**.
 3. Right-click a normal HTTPS page, choose **Move tab to profile**, and select
@@ -133,6 +141,26 @@ Moving tabs needs the ProfileBar app on macOS and at least two Chrome profiles.
    options page. Add the rule `example.com` for the other profile, then open
    `https://example.com` in a new tab. Confirm it opens in the other profile
    and the new tab closes.
+7. In the first profile, type `https://example.com` into an existing tab's
+   address bar, which link routing leaves alone. Close that tab and press
+   Cmd+Shift+T. Confirm it reopens in the same profile.
+8. Right-click the extension's toolbar icon on an HTTPS page. Confirm **Move
+   tab to profile** and **Always open this site in** work, that **Move group to
+   profile** appears only on a tab in a group, and that the destinations are
+   greyed out on `chrome://extensions`.
+9. In Chrome 155 or later, put two HTTPS tabs in a split view, right-click
+   either half in the tab strip, and move it. Confirm both open side by side in
+   the other profile.
+
+Condensed version for the Dashboard:
+
+> Needs macOS, two Chrome profiles, and ProfileBar 1.6+ from
+> https://afrojun.dev/profilebar/ (open it once). Install the extension in both
+> profiles and choose Identify profiles on its options page. Right-click a page,
+> a tab, or the toolbar icon and choose Move tab to profile. Add the rule
+> example.com for the other profile, then open https://example.com in a new tab:
+> it opens there. A tab reopened with Cmd+Shift+T stays put. In Chrome 155+, a
+> split view moved from the tab strip arrives split.
 
 ## Assets
 

@@ -1,13 +1,17 @@
 # ProfileBar for Chrome Privacy Policy
 
-Effective date: 2 November 2026
+Effective date: 5 November 2026
 
 ProfileBar for Chrome reads tab URLs when you choose a move action from its
 right-click menu, and when a new tab opens if you use link routing. For a move,
 it reads the clicked tab, the highlighted tabs, or the
 tabs in the chosen group. For a group move, it also reads the group's title,
 colour, and collapsed state. To show the group actions only when they apply, it
-checks whether the focused window has any tab group, which reads no URLs.
+checks whether the focused window has any tab group, which reads no URLs. To
+show only the toolbar icon's actions that apply, it checks the active tab's URL
+and group when you switch tabs or the tab changes, on your Mac. When you move
+one half of a split view from the tab strip, it also reads the other half so
+both move together.
 
 Link routing reads the URL of each new tab, and any redirect in its first
 moments, and compares it with your rules on your Mac. It never reads the tabs
@@ -47,14 +51,15 @@ Store User Data Policy, including the Limited Use requirements.
 ## Permissions
 
 - `contextMenus` adds the move actions and **Always open this site in** to the
-  right-click menus.
+  right-click menus and the toolbar icon's menu.
 - `declarativeNetRequest` holds back a new tab's page load while link routing
   moves it, so the site is not loaded twice. Its rules come only from your
   link-routing rules and apply only to new tabs.
 - `nativeMessaging` connects to ProfileBar on this Mac.
 - `storage` remembers which profile directory this copy of the extension runs in.
 - `tabs` reads the URLs of the tabs you choose to move and closes them after a
-  successful move.
+  successful move. It also checks the active tab's URL and group to show only
+  the toolbar actions that apply, and which tabs share a split view.
 - `tabGroups` reads a chosen group's visible details and recreates them in the
   destination profile, and checks whether the focused window has a group.
 - `webNavigation` tells link routing which new tabs a web page opened, so the
