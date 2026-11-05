@@ -72,7 +72,16 @@ on run arguments
 end run
 APPLESCRIPT
 
-hdiutil detach "$mount" >/dev/null
+# Finder can keep the volume busy for a moment after it lays out the window, so the detach is retried.
+detached=false
+for attempt in {1..10}; do
+  if hdiutil detach "$mount" >/dev/null 2>&1; then
+    detached=true
+    break
+  fi
+  sleep 1
+done
+[[ "$detached" == true ]] || hdiutil detach "$mount" -force >/dev/null
 mounted=false
 hdiutil convert "$writable" \
   -format UDZO \
