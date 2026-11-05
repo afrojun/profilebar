@@ -161,6 +161,7 @@ struct ProfileBarTests {
                 profiles: [workProfile, otherWorkProfile]) == nil,
             "an ambiguous profile label must leave all destinations visible")
         var openedURLs: [URL]?
+        var openedSplits: TabSplits?
         var openedGroup: TabGroupDetails?
         var groupedResult = true
         var settingsProfile: ChromeProfile?
@@ -169,9 +170,13 @@ struct ProfileBarTests {
         let bridge = ProfileBridge(
             loadProfiles: { [workProfile] },
             focusedProfile: { _ in workProfile },
-            openURLs: { _, urls in openedURLs = urls },
-            openGroup: { _, _, group, _ in
+            openURLs: { _, urls, splits in
+                openedURLs = urls
+                openedSplits = splits
+            },
+            openGroup: { _, _, group, splits, _ in
                 openedGroup = group
+                openedSplits = splits
                 return groupedResult
             },
             openProfileSettings: { profile, _ in
@@ -224,6 +229,23 @@ struct ProfileBarTests {
             openedURLs?.map(\.absoluteString) == ["https://example.com/first", "https://example.com/second"],
             "the launcher should receive every URL in tab order"
         )
+        expect(openedSplits == TabSplits.none, "a batch without split views should open separate tabs")
+        var splitBatch: [String: Any] = [
+            "type": "openURLs", "profileDirectory": "Profile 2",
+            "urls": ["https://example.com/a", "https://example.com/b", "https://example.com/c"],
+            "splits": [[1, 2]],
+        ]
+        expect(bridge.handle(splitBatch)["ok"] as? Bool == true, "a batch with a split view should open")
+        expect(openedSplits?.pairs == [[1, 2]], "the split view should reach the destination")
+        for invalid: Any in [
+            [[0, 2]], [[1, 0]], [[2, 3]], [[0, 1], [1, 2]], [[0]], [[Int.max, 0]], [[-1, 0]], "0-1", NSNull(),
+        ] {
+            splitBatch["splits"] = invalid
+            openedSplits = nil
+            expect(
+                bridge.handle(splitBatch)["error"] as? String == "invalid_request" && openedSplits == nil,
+                "split views must pair neighbouring tabs in the batch, each tab once: \(invalid)")
+        }
         let groupRequest: [String: Any] = [
             "type": "openGroup", "profileDirectory": "Profile 2",
             "urls": ["https://example.com/first", "https://example.com/second"],
@@ -239,6 +261,10 @@ struct ProfileBarTests {
         expect(
             openedGroup?.title == "Research" && openedGroup?.color == "blue" && openedGroup?.collapsed == true,
             "group metadata should reach the destination")
+        var splitGroupRequest = groupRequest
+        splitGroupRequest["splits"] = [[0, 1]]
+        _ = bridge.handle(splitGroupRequest, callerExtensionID: NativeHostRegistration.storeExtensionID)
+        expect(openedSplits?.pairs == [[0, 1]], "a split view inside a group should reach the destination")
         groupedResult = false
         let ungrouped = bridge.handle(groupRequest, callerExtensionID: NativeHostRegistration.storeExtensionID)
         expect(
@@ -495,14 +521,17 @@ struct ProfileBarTests {
         DispatchQueue.global().async {
             let opened =
                 ProfileRelay.requestOpen(
-                    [URL(string: "https://example.com/arrival")!], inProfileDirectory: "Profile 9002") == .opened
+                    [URL(string: "https://example.com/arrival")!, URL(string: "https://example.com/beside")!],
+                    splits: TabSplits(pairs: [[0, 1]]), inProfileDirectory: "Profile 9002") == .opened
             peerResult.withLock { peerOpened = opened }
             peerFinished.signal()
         }
         let arrival = nextSessionMessage()
         expect(
-            arrival?["type"] as? String == "open" && (arrival?["urls"] as? [String]) == ["https://example.com/arrival"],
-            "another helper's tabs should be opened by this profile's extension copy")
+            arrival?["type"] as? String == "open"
+                && (arrival?["urls"] as? [String]) == ["https://example.com/arrival", "https://example.com/beside"]
+                && (arrival?["splits"] as? [[Int]]) == [[0, 1]],
+            "another helper's tabs and split views should be opened by this profile's extension copy")
         session.handle(["type": "opened", "requestId": arrival?["requestId"] ?? "", "ok": true, "started": true])
         expect(
             peerFinished.wait(timeout: .now() + 3) == .success && peerResult.withLock { peerOpened },

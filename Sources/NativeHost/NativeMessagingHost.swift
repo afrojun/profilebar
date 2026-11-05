@@ -14,7 +14,9 @@ struct NativeMessagingHost {
         let bridge = ProfileBridge(
             loadProfiles: ChromeProfileStore.load,
             focusedProfile: ChromeFocusedProfile.detect,
-            openURLs: { profile, urls in try ProfileOpener.open(urls, inProfileDirectory: profile.directory) },
+            openURLs: { profile, urls, splits in
+                try ProfileOpener.open(urls, splits: splits, inProfileDirectory: profile.directory)
+            },
             openGroup: GroupHandoff.open,
             openProfileSettings: ChromeProfileSettingsLauncher.open,
             saveLinkRouting: { try LinkRoutingStore.save($0) },

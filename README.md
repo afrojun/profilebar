@@ -34,7 +34,9 @@ Select several tabs and right-click one of them to move them together in tab
 order. To move a whole tab group, right-click a tab inside it and choose
 **Move group to [profile]**. If ProfileBar for Chrome is also installed in the
 destination profile, it recreates the group title, colour, and collapsed state.
-Otherwise, ProfileBar opens the URLs without a group. The group items appear
+Otherwise, ProfileBar opens the URLs without a group. Moving either half of a
+split view moves both, and in Chrome 155 or later they arrive split again when
+the destination has the extension. The group items appear
 while the window has a tab group, because Chrome does not tell extensions which
 tab was right-clicked until an item is chosen.
 
