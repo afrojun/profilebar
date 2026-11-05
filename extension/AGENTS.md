@@ -23,6 +23,7 @@ URL copying belongs to the separate Instant Copy URL extension. Do not add it he
 - `background.js`: menu state, move flow, and the setup page's connection check.
 - `router.js`: link routing in the service worker. It tracks new tabs, keeps the request-blocking rules, asks ProfileBar to route matching tabs, and opens arrivals.
 - `routing-rules.js`: rule matching, precedence, and request-blocking rules, shared by the service worker and the setup page.
+- `tab-splits.js`: finds the split views in a move and splits the arrived tabs again, shared by the service worker and the group receiver.
 - `identify.*`: ProfileBar opens it in each profile so this copy of the extension learns its profile directory.
 - `group-receiver.*`: claims a group handoff in the destination profile and recreates it.
 - `setup.*`: first-run and options page with a live ProfileBar connection check and the link-routing settings.

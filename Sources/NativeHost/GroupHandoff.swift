@@ -5,6 +5,7 @@ enum GroupHandoff {
         profile: ChromeProfile,
         urls: [URL],
         group: TabGroupDetails,
+        splits: TabSplits,
         extensionID: String
     ) throws -> Bool {
         guard ProfileExtensionAvailability.isEnabled(in: profile, extensionID: extensionID) else {
@@ -12,7 +13,9 @@ enum GroupHandoff {
             return false
         }
 
-        let relay = try HandoffRelay(payload: ["urls": urls.map(\.absoluteString), "group": group.dictionary])
+        let relay = try HandoffRelay(payload: [
+            "urls": urls.map(\.absoluteString), "group": group.dictionary, "splits": splits.pairs,
+        ])
         let receiver = URL(string: "chrome-extension://\(extensionID)/group-receiver.html#\(relay.token)")!
         try ChromeURLLauncher.open(profile, urls: [receiver])
 

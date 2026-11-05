@@ -23,12 +23,13 @@ enum ProfileRelay {
     }
 
     /// Asks the profile's extension copy to open the URLs.
-    static func requestOpen(_ urls: [URL], inProfileDirectory directory: String) -> Delivery {
+    static func requestOpen(
+        _ urls: [URL], splits: TabSplits = .none, inProfileDirectory directory: String
+    ) -> Delivery {
         guard let client = try? LocalSocket.connect(to: socketPath(for: directory)) else { return .declined }
         defer { _ = Darwin.close(client) }
-        guard (try? LocalSocket.writeFrame(client, ["type": "open", "urls": urls.map(\.absoluteString)])) != nil else {
-            return .declined
-        }
+        let request: [String: Any] = ["type": "open", "urls": urls.map(\.absoluteString), "splits": splits.pairs]
+        guard (try? LocalSocket.writeFrame(client, request)) != nil else { return .declined }
         guard let reply = try? LocalSocket.readFrame(client) else { return .uncertain }
         if reply["ok"] as? Bool == true { return .opened }
         return reply["started"] as? Bool == false ? .declined : .uncertain
@@ -86,8 +87,8 @@ final class ProfileRelayListener {
 enum ProfileOpener {
     /// Opens the URLs through the profile's own extension copy when it is connected, so they arrive as tabs that are
     /// never routed. Otherwise it asks Chrome to open them in that profile.
-    static func open(_ urls: [URL], inProfileDirectory directory: String) throws {
-        switch ProfileRelay.requestOpen(urls, inProfileDirectory: directory) {
+    static func open(_ urls: [URL], splits: TabSplits = .none, inProfileDirectory directory: String) throws {
+        switch ProfileRelay.requestOpen(urls, splits: splits, inProfileDirectory: directory) {
         case .opened:
             return
         case .declined:

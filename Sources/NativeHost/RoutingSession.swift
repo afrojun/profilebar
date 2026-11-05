@@ -70,9 +70,10 @@ final class RoutingSession {
             return ["ok": true]
         case "open":
             guard let urls = request["urls"] as? [String], (1...100).contains(urls.count),
-                urls.allSatisfy({ ProfileBridge.webURL($0) != nil })
+                urls.allSatisfy({ ProfileBridge.webURL($0) != nil }),
+                let splits = TabSplits.parse(request["splits"], tabCount: urls.count)
             else { return ["ok": false, "started": false] }
-            return openArrivals(urls)
+            return openArrivals(urls, splits: splits)
         default:
             return ["ok": false, "started": false]
         }
@@ -80,11 +81,11 @@ final class RoutingSession {
 
     /// Asks this extension copy to create the tabs, and waits briefly for it to confirm. Without an answer, the tabs
     /// may still open, so the reply says that delivery started.
-    private func openArrivals(_ urls: [String]) -> [String: Any] {
+    private func openArrivals(_ urls: [String], splits: TabSplits) -> [String: Any] {
         let requestID = UUID().uuidString
         let arrival = PendingArrival()
         lock.withLock { pendingArrivals[requestID] = arrival }
-        send(["type": "open", "requestId": requestID, "urls": urls])
+        send(["type": "open", "requestId": requestID, "urls": urls, "splits": splits.pairs])
         let answered = arrival.answered.wait(timeout: .now() + Self.arrivalTimeout) == .success
         lock.withLock { pendingArrivals[requestID] = nil }
         guard answered else { return ["ok": false, "started": true] }

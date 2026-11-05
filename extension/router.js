@@ -166,7 +166,7 @@ function routeDestination(url, source) {
 async function canLeaveWhereOpened(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (Number.isInteger(tab.splitViewId) && tab.splitViewId !== -1) return false;
+    if (TabSplits.isSplit(tab)) return false;
     return (await chrome.windows.get(tab.windowId)).type === "normal";
   } catch {
     return false;
@@ -238,14 +238,16 @@ function updateBlockRules() {
 
 // Another profile routed these URLs here, or a manual move is arriving. Open them in this profile's last window.
 // started tells ProfileBar whether any tab opened, because opening the URLs another way would then duplicate them.
-async function openArrivals({ requestId, urls }) {
+async function openArrivals({ requestId, urls, splits }) {
   let ok = false;
   let started = false;
   try {
     if (Array.isArray(urls) && urls.length > 0 && urls.every(RoutingRules.isWebUrl)) {
       const window = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
+      const tabIds = [];
       for (const [index, url] of urls.entries()) {
         const tab = await chrome.tabs.create({ windowId: window.id, url: "about:blank", active: index === 0 });
+        tabIds.push(tab.id);
         started = true;
         // An old rule could still block the page, so the arrival fails rather than load it.
         await keepTabs([tab.id]).catch(async (error) => {
@@ -255,6 +257,7 @@ async function openArrivals({ requestId, urls }) {
         await chrome.tabs.update(tab.id, { url });
       }
       ok = true;
+      await TabSplits.rebuild(tabIds, splits);
       await chrome.windows.update(window.id, window.state === "minimized"
         ? { focused: true, state: "normal" }
         : { focused: true }).catch(() => {}); // the tabs are open even if Chrome declines to focus the window

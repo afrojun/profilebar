@@ -27,7 +27,8 @@ zip -q -FS "$archive" \
   routing-rules.js \
   setup.css \
   setup.html \
-  setup.js
+  setup.js \
+  tab-splits.js
 # The repository licence sits one level up; store it at the archive root.
 zip -q -j "$archive" ../LICENSE
 

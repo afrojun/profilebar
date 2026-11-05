@@ -12,6 +12,7 @@ const STARTUP_MS = 3000;
 function menuHarness({
   installedFromStore = true, hostResponse = { ok: true, profiles: [] }, tabContext = true, os = "mac", focused = true,
   profileDirectory = null, settleStartup = true, leftoverRules = [], focusError = null, noWindow = false,
+  canSplit = true,
 } = {}) {
   const listeners = { messageHandlers: [] };
   listeners.message = (message, sender, sendResponse) => listeners.messageHandlers
@@ -20,6 +21,7 @@ function menuHarness({
   const ports = [];
   const ruleUpdates = [];
   const reloadedTabs = [];
+  const splits = [];
   const windowUpdates = [];
   const tabUpdates = [];
   const windowTypes = new Map();
@@ -126,6 +128,7 @@ function menuHarness({
         return created;
       },
       async reload(id) { reloadedTabs.push(id); },
+      ...(canSplit && { async createSplit(ids) { splits.push(ids); } }),
       async update(id, properties) { tabUpdates.push({ id, ...properties }); },
       async query({ active, highlighted, groupId, windowId }) {
         return [...tabs.values()].filter((tab) => (!active || tab.active) && (!highlighted || tab.highlighted)
@@ -205,6 +208,7 @@ function menuHarness({
     ports,
     ruleUpdates,
     reloadedTabs,
+    splits,
     windowUpdates,
     tabUpdates,
     storage,
@@ -592,6 +596,32 @@ test("a tab-menu move opens all highlighted tabs in strip order, then closes the
 });
 
 
+test("moving one half of a split view moves both and keeps them split", async () => {
+  const harness = menuHarness();
+  harness.setTab({ id: 1, windowId: 7, index: 0, url: "https://example.com/before" });
+  harness.setTab({ id: 2, windowId: 7, index: 1, splitViewId: 5, url: "https://example.com/left" });
+  harness.setTab({ id: 3, windowId: 7, index: 2, splitViewId: 5, url: "https://example.com/right" });
+  harness.listeners.clicked({ menuItemId: "tab:profile:Default" }, { id: 3, windowId: 7, splitViewId: 5 });
+  await new Promise(setImmediate);
+
+  const { message } = harness.nativeMessages.at(-1);
+  assert.equal(message.type, "openURLs");
+  assert.deepEqual(plain(message.urls), ["https://example.com/left", "https://example.com/right"]);
+  assert.deepEqual(plain(message.splits), [[0, 1]]);
+  assert.deepEqual(harness.removedTabs, [2, 3]);
+});
+
+test("a group move sends the split views inside it", async () => {
+  const harness = menuHarness();
+  harness.setGroup({ id: 8, windowId: 7, title: "Research", color: "blue", collapsed: false });
+  harness.setTab({ id: 1, windowId: 7, groupId: 8, index: 0, url: "https://example.com/alone" });
+  harness.setTab({ id: 2, windowId: 7, groupId: 8, index: 1, splitViewId: 5, url: "https://example.com/left" });
+  harness.setTab({ id: 3, windowId: 7, groupId: 8, index: 2, splitViewId: 5, url: "https://example.com/right" });
+  harness.listeners.clicked({ menuItemId: "group:profile:Default" }, { id: 1, windowId: 7, groupId: 8 });
+  await new Promise(setImmediate);
+  assert.deepEqual(plain(harness.nativeMessages.at(-1).message.splits), [[1, 2]]);
+});
+
 test("a group move preserves its metadata and reports the ungrouped fallback", async () => {
   const harness = menuHarness();
   harness.setGroup({ id: 8, windowId: 7, title: "Research", color: "blue", collapsed: true });
@@ -861,6 +891,19 @@ test("tabs that another profile sends here open in the last window and are never
   harness.listeners.tabUpdated(500, { url: "https://jira.example.com/moved" });
   await flush();
   assert.deepEqual(routeMessages(port), []);
+});
+
+test("arriving split views are split again, and Chrome without splits still opens the tabs", async () => {
+  const { harness, port } = await connectedRouter();
+  port.receive({ type: "open", requestId: "r5", urls: ["https://example.com/a", "https://example.com/b"], splits: [[0, 1]] });
+  await flush();
+  assert.deepEqual(plain(harness.splits), [[500, 501]]);
+  assert.deepEqual(port.messages.at(-1), { type: "opened", requestId: "r5", ok: true, started: true });
+
+  const older = await connectedRouter({ canSplit: false });
+  older.port.receive({ type: "open", requestId: "r6", urls: ["https://example.com/a", "https://example.com/b"], splits: [[0, 1]] });
+  await flush();
+  assert.deepEqual(older.port.messages.at(-1), { type: "opened", requestId: "r6", ok: true, started: true });
 });
 
 test("an arrival that opened its tabs succeeds even if Chrome declines to focus the window", async () => {

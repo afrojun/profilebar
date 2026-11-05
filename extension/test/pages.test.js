@@ -6,9 +6,13 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 
-function runScript(file, context) {
-  const source = fs.readFileSync(path.join(root, file), "utf8");
-  vm.runInNewContext(source, context);
+// Runs a page's scripts in the order its HTML loads them.
+function runPage(page, context) {
+  const html = fs.readFileSync(path.join(root, page), "utf8");
+  vm.createContext(context);
+  for (const [, file] of html.matchAll(/<script[^>]*\ssrc="([^"]+)"/g)) {
+    vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
+  }
 }
 
 test("manifest requires ProfileBar access, routing permissions, and no page access", () => {
@@ -56,7 +60,7 @@ test("the destination receiver recreates a group before acknowledging the move",
     },
   };
 
-  runScript("group-receiver.js", {
+  runPage("group-receiver.html", {
     chrome,
     location: { hash: `#${token}`, pathname: "/group-receiver.html" },
     history: { replaceState() {} },
@@ -77,6 +81,47 @@ test("the destination receiver recreates a group before acknowledging the move",
   assert.equal(calls.findIndex(([type, , message]) => type === "native" && message.type === "completeGroup")
     > calls.findIndex(([type]) => type === "update"), true);
   assert.deepEqual(calls.at(-1), ["remove", 7]);
+});
+
+test("the destination receiver splits tabs that were split before the move", async () => {
+  const calls = [];
+  let nextTabId = 11;
+  const chrome = {
+    runtime: {
+      getManifest() { return { update_url: "https://clients2.google.com/service/update2/crx" }; },
+      async sendMessage() { return { ok: true }; },
+      async sendNativeMessage(host, message) {
+        calls.push(["native", message]);
+        return message.type === "claimGroup"
+          ? { ok: true, urls: ["https://example.com/a", "https://example.com/b", "https://example.com/c"],
+            group: { title: "Research", color: "blue", collapsed: false }, splits: [[1, 2]] }
+          : { ok: true };
+      },
+    },
+    tabs: {
+      async getCurrent() { return { id: 7, windowId: 4, index: 2 }; },
+      async create() { return { id: nextTabId++ }; },
+      async update() {},
+      async group() { calls.push(["group"]); return 22; },
+      async createSplit(ids) { calls.push(["split", ids]); },
+      async remove(ids) { calls.push(["remove", ids]); },
+    },
+    tabGroups: { async update() { calls.push(["update"]); } },
+  };
+
+  runPage("group-receiver.html", {
+    chrome,
+    location: { hash: "#a74ac3fb-1e22-49cc-84ce-efb579d7ade1", pathname: "/group-receiver.html" },
+    history: { replaceState() {} },
+    console,
+  });
+  await new Promise(setImmediate);
+
+  const steps = calls.map(([type, details]) => (type === "native" ? details.type : type));
+  assert.deepEqual(plain(calls.find(([type]) => type === "split")[1]), [12, 13]);
+  assert.ok(steps.indexOf("split") > steps.indexOf("group"), "Chrome splits tabs only within one group");
+  assert.deepEqual(plain(calls.find(([type, details]) => type === "native" && details.type === "completeGroup")[1]),
+    { type: "completeGroup", token: "a74ac3fb-1e22-49cc-84ce-efb579d7ade1", ok: true });
 });
 
 test("a failed destination group removes created tabs and reports failure", async () => {
@@ -105,7 +150,7 @@ test("a failed destination group removes created tabs and reports failure", asyn
     },
   };
 
-  runScript("group-receiver.js", {
+  runPage("group-receiver.html", {
     chrome,
     location: { hash: "#a74ac3fb-1e22-49cc-84ce-efb579d7ade1", pathname: "/group-receiver.html" },
     history: { replaceState() {} },
@@ -139,7 +184,7 @@ test("a group move fails without loading its pages when link routing cannot keep
     },
   };
 
-  runScript("group-receiver.js", {
+  runPage("group-receiver.html", {
     chrome,
     location: { hash: "#a74ac3fb-1e22-49cc-84ce-efb579d7ade1", pathname: "/group-receiver.html" },
     history: { replaceState() {} },
@@ -322,11 +367,11 @@ test("the setup page explains macOS-only support and failed checks", async () =>
 test("the move status page explains the error code", () => {
   const elements = { "#heading": { textContent: "" }, "#detail": { textContent: "" } };
   const document = { querySelector: (selector) => elements[selector] };
-  runScript("move-status.js", { document, location: { hash: "#group-opened-ungrouped" } });
+  runPage("move-status.html", { document, location: { hash: "#group-opened-ungrouped" } });
   assert.equal(elements["#heading"].textContent, "Tabs moved without a group");
   assert.match(elements["#detail"].textContent, /Install ProfileBar for Chrome in that profile/);
 
-  runScript("move-status.js", { document, location: { hash: "#unknown" } });
+  runPage("move-status.html", { document, location: { hash: "#unknown" } });
   assert.match(elements["#detail"].textContent, /could not open the selected pages/);
 });
 

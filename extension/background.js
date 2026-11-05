@@ -11,7 +11,7 @@ const ALWAYS_MENU_ROOT = "always-open-site";
 const ALWAYS_PREFIX = "always:";
 const ACTION_GROUP_ROOT = "action-group";
 
-importScripts("routing-rules.js", "router.js");
+importScripts("routing-rules.js", "tab-splits.js", "router.js");
 
 let menuRefresh = Promise.resolve();
 // Chrome does not say which tab was right-clicked before it shows the menu, so the group actions
@@ -368,13 +368,14 @@ async function moveToProfile(profileDirectory, info, tab, mode) {
   let response;
   try {
     const urls = sourceTabs.map(({ url }) => url);
+    const splits = TabSplits.pairs(sourceTabs);
     const request = source.group
-      ? { type: "openGroup", profileDirectory, urls, group: {
+      ? { type: "openGroup", profileDirectory, urls, splits, group: {
         title: source.group.title ?? "", color: source.group.color, collapsed: source.group.collapsed,
       } }
       : urls.length === 1
         ? { type: "openURL", profileDirectory, url: urls[0] }
-        : { type: "openURLs", profileDirectory, urls };
+        : { type: "openURLs", profileDirectory, urls, splits };
     response = await chrome.runtime.sendNativeMessage(NATIVE_HOST, request);
   } catch (error) {
     console.debug("ProfileBar could not open the tab:", error);
@@ -400,11 +401,17 @@ async function moveToProfile(profileDirectory, info, tab, mode) {
 
 async function selectedTabs(clickedTab) {
   if (!Number.isInteger(clickedTab.windowId)) return [{ id: clickedTab.id, url: clickedTab.url }];
-  const highlighted = await chrome.tabs.query({ highlighted: true, windowId: clickedTab.windowId });
-  if (highlighted.length < 2 || !highlighted.some(({ id }) => id === clickedTab.id)) {
-    return [{ id: clickedTab.id, url: clickedTab.url }];
-  }
-  return highlighted.sort((a, b) => a.index - b.index);
+  const windowTabs = await chrome.tabs.query({ windowId: clickedTab.windowId });
+  const highlighted = windowTabs.filter((tab) => tab.highlighted);
+  const selection = highlighted.length >= 2 && highlighted.some(({ id }) => id === clickedTab.id)
+    ? highlighted
+    : [{ id: clickedTab.id, url: clickedTab.url, splitViewId: clickedTab.splitViewId }];
+  // Chrome shows a split view as one tab, so moving either half moves both.
+  const splitViewIds = new Set(selection.filter(TabSplits.isSplit).map(({ splitViewId }) => splitViewId));
+  if (splitViewIds.size === 0) return selection.sort((a, b) => a.index - b.index);
+  return windowTabs
+    .filter((tab) => selection.some(({ id }) => id === tab.id) || splitViewIds.has(tab.splitViewId))
+    .sort((a, b) => a.index - b.index);
 }
 
 async function selectedGroup(clickedTab) {

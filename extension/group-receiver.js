@@ -40,6 +40,7 @@ async function receiveGroup() {
       createProperties: { windowId: receiverTab.windowId },
     });
     await chrome.tabGroups.update(groupId, response.group);
+    await TabSplits.rebuild(createdTabs, response.splits);
     groupReady = true;
     completionAttempted = true;
     const completion = await chrome.runtime.sendNativeMessage(NATIVE_HOST, { type: "completeGroup", token, ok: true });

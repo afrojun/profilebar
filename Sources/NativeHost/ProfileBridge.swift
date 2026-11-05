@@ -3,8 +3,8 @@ import Foundation
 struct ProfileBridge {
     let loadProfiles: () throws -> [ChromeProfile]
     let focusedProfile: ([ChromeProfile]) -> ChromeProfile?
-    let openURLs: (ChromeProfile, [URL]) throws -> Void
-    let openGroup: (ChromeProfile, [URL], TabGroupDetails, String) throws -> Bool
+    let openURLs: (ChromeProfile, [URL], TabSplits) throws -> Void
+    let openGroup: (ChromeProfile, [URL], TabGroupDetails, TabSplits, String) throws -> Bool
     let openProfileSettings: (ChromeProfile, String) throws -> Bool
     let saveLinkRouting: (LinkRoutingSettings) throws -> Void
     let identifyProfiles: ([ChromeProfile], String) -> ProfileIdentification.Result
@@ -68,7 +68,10 @@ struct ProfileBridge {
                 else { return failure("invalid_request") }
 
                 let urls = rawURLs.compactMap(Self.webURL)
-                guard urls.count == rawURLs.count else { return failure("invalid_request") }
+                guard
+                    urls.count == rawURLs.count,
+                    let splits = TabSplits.parse(request["splits"], tabCount: urls.count)
+                else { return failure("invalid_request") }
 
                 guard let profile = try loadProfiles().first(where: { $0.directory == directory }) else {
                     return failure("profile_not_found")
@@ -78,10 +81,10 @@ struct ProfileBridge {
                         let group = TabGroupDetails.parse(request["group"]),
                         let callerExtensionID = Self.validExtensionID(callerExtensionID)
                     else { return failure("invalid_request") }
-                    let grouped = try openGroup(profile, urls, group, callerExtensionID)
+                    let grouped = try openGroup(profile, urls, group, splits, callerExtensionID)
                     return ["ok": true, "grouped": grouped]
                 }
-                try openURLs(profile, urls)
+                try openURLs(profile, urls, splits)
                 return ["ok": true]
             default:
                 return failure("invalid_request")
@@ -135,6 +138,28 @@ struct TabGroupDetails {
 
     var dictionary: [String: Any] {
         ["title": title, "color": color, "collapsed": collapsed]
+    }
+}
+
+/// Split views among the tabs being moved, as pairs of neighbouring positions in the URL list. The destination's
+/// extension copy shows each pair side by side again. Opening the URLs any other way leaves them as separate tabs.
+struct TabSplits: Equatable {
+    static let none = Self(pairs: [])
+
+    let pairs: [[Int]]
+
+    /// A missing value means no splits. Each pair names two neighbouring tabs, and no tab can be in two pairs.
+    static func parse(_ value: Any?, tabCount: Int) -> Self? {
+        guard let value else { return none }
+        guard let pairs = value as? [[Int]] else { return nil }
+        var used = Set<Int>()
+        for pair in pairs {
+            guard
+                pair.count == 2, (0..<tabCount - 1).contains(pair[0]), pair[1] == pair[0] + 1,
+                used.insert(pair[0]).inserted, used.insert(pair[1]).inserted
+            else { return nil }
+        }
+        return Self(pairs: pairs)
     }
 }
 
