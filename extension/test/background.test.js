@@ -691,12 +691,37 @@ test("tabs that open while Chrome starts stay put, and manual moves wait for sta
   assert.equal(harness.nativeMessages.at(-1).message.type, "openURL");
 });
 
+test("a reopened tab stays in its profile, and reloads if Chrome blocked it", async () => {
+  const { harness, port } = await connectedRouter({ settings: { ...workRules, fallbackProfileDirectory: "Profile 3" } });
+  // A restored tab already has the page it showed, and the one in front is loading it again.
+  const reopened = { id: 25, windowId: 1, url: "https://jira.example.com/browse/X-4" };
+  const loading = { id: 26, windowId: 1, url: "https://news.example.org/", pendingUrl: "https://news.example.org/" };
+  for (const tab of [reopened, loading]) {
+    harness.setTab(tab);
+    harness.listeners.tabCreated(tab);
+  }
+  harness.listeners.navigationError({ tabId: 26, frameId: 0, error: "net::ERR_BLOCKED_BY_CLIENT" });
+  await flush();
+  assert.deepEqual(routeMessages(port), []);
+  assert.deepEqual(harness.reloadedTabs, [26]);
+  assert.ok([25, 26].every((id) => harness.ruleUpdates.at(-1).addRules[0].condition.excludedTabIds.includes(id)));
+});
+
 test("popup windows, such as sign-in windows, are never routed", async () => {
   const { harness, port } = await connectedRouter();
   harness.setWindowType(7, "popup");
   openFromPage(harness, 11, "https://jira.example.com/login", 7);
   await flush();
   assert.deepEqual(routeMessages(port), []);
+});
+
+test("a link opened into a split view stays beside its page", async () => {
+  const { harness, port } = await connectedRouter();
+  openFromPage(harness, 27, "https://jira.example.com/browse/X-5");
+  harness.setTab({ id: 27, windowId: 1, splitViewId: 4 }); // Chrome joins the split before the router asks
+  await flush();
+  assert.deepEqual(routeMessages(port), []);
+  assert.ok(harness.ruleUpdates.at(-1).addRules[0].condition.excludedTabIds.includes(27));
 });
 
 test("each source can be turned off, and a blocked tab from it reloads where it is", async () => {

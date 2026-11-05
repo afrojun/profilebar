@@ -36,8 +36,9 @@ chrome.tabs.onCreated.addListener((tab) => {
   const fresh = trackNewTab(tab.id);
   const url = tab.pendingUrl || tab.url;
   if (!fresh || !url || url === "about:blank") return;
-  if (!RoutingRules.isWebUrl(url)) {
-    settle(tab.id); // the new-tab page and other browser pages
+  // A new tab has only a pending URL. A tab that already shows a page was reopened or duplicated, so it stays.
+  if (tab.url || !RoutingRules.isWebUrl(url)) {
+    settle(tab.id); // also the new-tab page and other browser pages
     return;
   }
   fresh.source ??= "otherApps";
@@ -133,15 +134,15 @@ async function considerTab(tabId, url) {
   }
 
   fresh.phase = "deciding";
-  const inNormalWindow = await isInNormalWindow(tabId);
+  const canLeave = await canLeaveWhereOpened(tabId);
   fresh.phase = "watching";
   if (freshTabs.get(tabId) !== fresh) return;
   if (fresh.source !== source) {
-    void considerTab(tabId, url); // Chrome reported that a page opened the tab while its window was checked
+    void considerTab(tabId, url); // Chrome reported that a page opened the tab while it was checked
     return;
   }
-  if (!inNormalWindow || !routingPort) {
-    settle(tabId); // popups, such as sign-in windows, stay where they are
+  if (!canLeave || !routingPort) {
+    settle(tabId);
     return;
   }
   fresh.phase = "routing";
@@ -161,9 +162,11 @@ function routeDestination(url, source) {
   return destination && destination !== routing.profileDirectory ? destination : null;
 }
 
-async function isInNormalWindow(tabId) {
+// Popups, such as sign-in windows, and links opened into a split view stay where they are.
+async function canLeaveWhereOpened(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
+    if (Number.isInteger(tab.splitViewId) && tab.splitViewId !== -1) return false;
     return (await chrome.windows.get(tab.windowId)).type === "normal";
   } catch {
     return false;
