@@ -44,7 +44,7 @@ node --test
 python3 scripts/build-dev.py
 ```
 
-Load the printed `dist/profilebar-for-chrome-dev` folder from `chrome://extensions` and always load it from that path, because the path sets the unpacked extension ID. Pass that ID to ProfileBar Dev as described in [development and releases](../docs/development.md). After a rebuild, reload the extension on `chrome://extensions`. Live move checks are in the [testing guide](../docs/testing.md).
+Load the printed `dist/profilebar-for-chrome-dev` folder from `chrome://extensions` and always load it from that path, because the path sets the unpacked extension ID. Pass that ID to ProfileBar Dev as described in [development and releases](../docs/development.md). After a rebuild, reload the extension on `chrome://extensions`. Live move checks are in the [testing guide](../docs/testing.md). To verify a change yourself in the user's running Chrome, follow the [live extension check](../.claude/skills/live-extension-check/SKILL.md).
 
 ## Releasing
 

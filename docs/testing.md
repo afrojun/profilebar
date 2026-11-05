@@ -56,4 +56,8 @@ For link routing, load the development extension in at least two profiles, choos
 
 Never test Chrome restarts or session restore while anything can route or open URLs. Sending URLs to a profile before Chrome has restored it makes Chrome skip that profile's session restore.
 
+### Agent-driven extension checks
+
+A coding agent can run most of these checks in the user's running Chrome across real profiles. The steps are in the [live extension check skill](../.claude/skills/live-extension-check/SKILL.md). Browser shortcuts such as Cmd+Shift+T and the toolbar and tab-strip menus still need a person.
+
 For a release, also check **Start at login**, the update-check action, the drag-to-Applications DMG, and the installed app's signature and Accessibility trust. The signing, notarization, and publication steps live in [development and releases](development.md).
