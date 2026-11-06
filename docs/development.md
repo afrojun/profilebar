@@ -47,6 +47,16 @@ To inspect the permission without opening the app UI:
 ./build/ProfileBar\ Dev.app/Contents/MacOS/ProfileBar --check-accessibility
 ```
 
+## Go back to the release app
+
+The two apps keep separate settings, including separate link-routing rules in `~/Library/Application Support/ProfileBar Dev/link-routing.json` and `~/Library/Application Support/ProfileBar/link-routing.json`. To switch back after development:
+
+1. Quit ProfileBar Dev.
+2. To keep rules you made in ProfileBar Dev, copy its `link-routing.json` into the `ProfileBar` folder. Create the folder if it doesn't exist.
+3. Launch the release app.
+4. In each Chrome profile, remove the unpacked extension, then install ProfileBar for Chrome from the Web Store. Remove it first, so two copies never route the same link.
+5. Open the extension's setup page in any profile and choose **Identify profiles**.
+
 ## Submit a change
 
 Work on a branch and open a pull request to `main`; direct pushes are blocked. Wait for the required `validate` check, address any review feedback, then merge. Confirm local `main` matches `origin/main` after merging. A merge does not publish an app update; only a pushed version tag starts the [release workflow](../.github/workflows/release.yml).
@@ -123,3 +133,49 @@ git push origin v1.1.0
 The workflow allows three hours for the job and up to 150 minutes for Apple's notarization service. It publishes nothing until notarization and verification succeed.
 
 GitHub does not expose repository secrets to workflows from forks. The workflow runs only for tags pushed to this repository, and its built-in token can only publish repository contents.
+
+## Publish the extension
+
+Pushing a tag `extension-vX.Y.Z` runs [the extension release workflow](../.github/workflows/extension-release.yml). It checks that the tag matches the version in `extension/manifest.json`, runs the tests, packages the extension, uploads it to the existing Web Store item and submits it for review. Chrome publishes the update automatically once it is approved.
+
+### Set up publishing
+
+The workflow signs in to Google with Workload Identity Federation, so it stores no keys. Set it up once:
+
+1. In the Google Cloud project, enable the **Chrome Web Store API**. Then open **IAM and admin → Workload Identity Federation**. In the pool for GitHub Actions, add an **OpenID Connect (OIDC)** provider:
+   - **Issuer:** `https://token.actions.githubusercontent.com`
+   - **Audience:** the default audience
+   - **Attribute mapping:** `google.subject` to `assertion.sub`, and `attribute.repository` to `assertion.repository`
+   - **Condition:** `assertion.repository=='afrojun/profilebar' && assertion.ref.startsWith('refs/tags/extension-v')`, so app tags and branches can't publish the extension
+2. Choose a service account that can use the Chrome Web Store API. Web Store access applies to a whole publisher account, so the publisher's other extensions can share one service account. On the service account, grant the **Workload Identity User** role to this principal:
+
+   ```text
+   principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/attribute.repository/afrojun/profilebar
+   ```
+
+3. If the service account is new, add its email address to the publisher account in the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole).
+4. In this repository's `chrome-web-store` environment, limit deployments to tags matching `extension-v*` and set the variables:
+
+   ```zsh
+   gh variable set GCP_WORKLOAD_IDENTITY_PROVIDER --env chrome-web-store --body "projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID"
+   gh variable set GCP_SERVICE_ACCOUNT --env chrome-web-store --body "SERVICE_ACCOUNT_EMAIL"
+   gh variable set CWS_PUBLISHER_ID --env chrome-web-store --body "PUBLISHER_ID"
+   gh variable set CWS_EXTENSION_ID --env chrome-web-store --body "EXTENSION_ID"
+   ```
+
+To check the setup without publishing, re-run the workflow for a tag whose version is already live. It signs in, then the Web Store rejects the upload with HTTP 400 and the workflow submits nothing. A 401 or 403 error, or a failed sign-in step, means a setting is wrong.
+
+### Release the extension
+
+1. Release ProfileBar first if the extension depends on a protocol change.
+2. On a branch, bump `version` in `extension/manifest.json`. Update [STORE_LISTING.md](../extension/STORE_LISTING.md) and [PRIVACY.md](../extension/PRIVACY.md) if the change affects them, then merge.
+3. From the updated `main`, create and push the tag:
+
+   ```zsh
+   git tag -a extension-v1.2.0 -m "ProfileBar for Chrome 1.2.0"
+   git push origin extension-v1.2.0
+   ```
+
+The workflow doesn't change the store listing. Copy any listing, screenshot or privacy changes into the Developer Dashboard by hand.
+
+If the workflow can't publish, upload the package by hand. Run `extension/scripts/package.sh` from a clean checkout of the tag, upload the zip it prints on the item's **Package** page in the Developer Dashboard, then submit it for review.

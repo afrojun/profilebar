@@ -48,8 +48,8 @@ Load the printed `dist/profilebar-for-chrome-dev` folder from `chrome://extensio
 
 ## Releasing
 
-Pushing a tag `extension-vX.Y.Z` that matches `manifest.json` runs `.github/workflows/extension-release.yml`. It tests, packages, uploads to the existing Web Store item, and requests `DEFAULT_PUBLISH`. Chrome reviews the update, and it goes live automatically if approved. Listing text and screenshots stay manual. Their source of truth is [STORE_LISTING.md](STORE_LISTING.md).
+Pushing a tag `extension-vX.Y.Z` that matches `manifest.json` runs `.github/workflows/extension-release.yml`. It tests, packages, uploads to the existing Web Store item, and requests `DEFAULT_PUBLISH`. Chrome reviews the update, and it goes live automatically if approved. Listing text and screenshots stay manual. Their source of truth is [STORE_LISTING.md](STORE_LISTING.md). The release steps, the one-time publishing setup and the manual upload are in [development and releases](../docs/development.md#publish-the-extension).
 
-The workflow authenticates through keyless Workload Identity Federation in the GitHub environment `chrome-web-store`, with the variables `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `CWS_PUBLISHER_ID`, and `CWS_EXTENSION_ID`. The Google Cloud provider must allow this repository on `refs/tags/extension-v` refs. App tags (`v*`) must not be able to publish the extension.
+The workflow authenticates through keyless Workload Identity Federation in the GitHub environment `chrome-web-store`. Only `refs/tags/extension-v` refs may publish the extension. The Google Cloud provider's condition and the environment's tag rule both enforce this, so app tags (`v*`) and branches can't publish it. Keep both when changing either.
 
 Release a ProfileBar version that supports a protocol change before the extension version that depends on it.
